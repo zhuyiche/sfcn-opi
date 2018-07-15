@@ -29,7 +29,7 @@ ROOT_DIR = os.getcwd()
 if ROOT_DIR.endswith('src'):
     ROOT_DIR = os.path.dirname(ROOT_DIR)
 
-DATA_DIR = os.path.join(ROOT_DIR, 'CRCHistoPhenotypes_2016_04_28', 'cls_and_det_point')
+DATA_DIR = os.path.join(ROOT_DIR, 'CRCHistoPhenotypes_2016_04_28', 'cls_and_det')
 
 class SCFNnetwork:
     def __init__(self, input_shape = (64, 64, 3)):
@@ -335,12 +335,13 @@ if __name__ == '__main__':
     print('detection branch training starts')
     #a ,b = generator_without_augmentation(train_imgs, train_det_masks, batch_size=BATCH_SIZE)
     start_time = time.time()
-    det_model.fit_generator(generator_without_augmentation(train_imgs, train_det, batch_size= 2), epochs=5,
+    det_model.load_weights('/home/yichen/Desktop/sfcn-opi-yichen/logs/sfcn-opi-detection_train_model.h5')
+    det_model.fit_generator(generator_without_augmentation(train_imgs, train_det, batch_size= 2), epochs=150,
                             steps_per_epoch=35,
                             validation_data=generator_without_augmentation(valid_imgs, valid_det, 2),
-                            validation_steps=5, callbacks=[TIMER, tensorboard])
+                            validation_steps=5, callbacks=[TIMER, tensorboard, checkpoint])
     print('detection branch training end, take : {}'.format(int(time.time() - start_time)*1000))
-    det_model.save(os.path.join(ROOT_DIR, 'logs', 'sfcn-opi-detection_train_model.h5'))
+    det_model.save(os.path.join(ROOT_DIR, 'logs', 'after300-sfcn-opi-detection_train_model.h5'))
 """
     det_model.fit(x=train_imgs, y = train_det_masks,
                   epochs=epochs, batch_size=BATCH_SIZE, #callbacks=[PRF],

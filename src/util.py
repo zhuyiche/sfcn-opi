@@ -338,8 +338,6 @@ def get_metrics(gt, pred, r=3):
 
 
 def mask_to_corrdinates(mask):
-    #print(mask)
-    print(mask.ndim)
     a = np.where(mask == 1)
     x = []
     for i, num in enumerate(a[0]):
@@ -352,12 +350,12 @@ if __name__ == '__main__':
 
     p = '/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28'
     from PIL import Image, ImageEnhance
-    load_mask = Image.open('/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28/cls_and_det_point/train/img3/img3_detection.bmp')
+    load_mask = Image.open('/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28/cls_and_det/train/img1/img1_detection.bmp')
     contrast = ImageEnhance.Contrast(load_mask)
     contrast.enhance(200).show(load_mask)
-    maskt = cv2.imread('/home/yichen/Desktop/sfcn-opi-yichen/   CRCHistoPhenotypes_2016_04_28/cls_and_det_point/train/img1/img1_detection.bmp', 0)
+    maskt = cv2.imread('/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28/cls_and_det/train/img1/img1_detection.bmp', 0)
     mask_to_corrdinates(maskt)
-    mat = loadmat('/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28/cls_and_det_point/train/img1/img1_detection.mat')['detection']
+    mat = loadmat('/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28/cls_and_det/train/img1/img1_detection.mat')['detection']
     print(np.sort(mat, axis=-1))
 
     '''
