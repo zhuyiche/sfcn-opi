@@ -14,10 +14,10 @@ from image_augmentation import ImageCropping, ImageAugmentation
 from imgaug import augmenters as iaa
 import imgaug as ia
 from loss import detection_loss, classification_loss
+from config import Config
+
 weight_decay = 0.005
 epsilon = 1e-7
-epochs = 20
-BATCH_SIZE = 32
 
 ROOT_DIR = os.getcwd()
 if ROOT_DIR.endswith('src'):
@@ -174,7 +174,7 @@ class SFCNnetwork:
         #x_output = Activation('softmax', name='Classification_output')(x)
         return x_output
 
-    def model_branch(self, kernel_size=3):
+    def build_model(self, kernel_size=3):
         input_img = Input(shape=self.input_shape)
         x = self.first_layer(input_img, kernel_size)
         x = self.first_and_second_res_blocks(x, 32, 64)
@@ -326,6 +326,16 @@ def aug_on_fly(img, det_mask, cls_mask, ):
 
 def generator_with_aug(features, det_labels, cls_labels, batch_size, crop_size,
                           crop_num=18, aug_num=4):
+    """
+    generator with basic augmentations which have been in the paper.
+    :param features: image.
+    :param det_labels: detection mask as label
+    :param cls_labels: classification mask as label
+    :param batch_size: batch size
+    :param crop_size: default size is 64
+    :param crop_num: how many cropped image for a single image.
+    :param aug_num: num of augmentation per cropped image
+    """
     batch_features = np.zeros((batch_size * crop_num * aug_num, crop_size, crop_size, 3))
     batch_det_labels = np.zeros((batch_size * crop_num * aug_num, crop_size, crop_size, 2))
     batch_cls_labels = np.zeros((batch_size * crop_num * aug_num, crop_size, crop_size, 5))
@@ -389,31 +399,46 @@ def callback_preparation(model):
     return [tensorboard_callback, checkpoint_callback, timer]
 
 
-def model_compile(model_input, summary=False):
-    model = model_input.model_branch()
-    print('model built')
-    if summary:
-        model.summary()
-
+def gpu_compile(summary=False):
+    """
+    Assign mutiple gpu model if mutiple gpu will be use.
+    split batch size into gpu number, that is if four gpu has been used and batch size is 32,
+    for each gpu will have batch size of 8.
+    :param summary: show model summary if true
+    :return: model
+    """
+    model = SFCNnetwork(l2_regularizer=L2WEIGHT)
     optimizer = SGD(lr=0.01, momentum=0.9, decay=1e-6, nesterov=True)
-    model.compile(optimizer=optimizer,
+    print('model is set')
+    if Config.gpu_count > 1:
+        with tf.device('/cpu:0'):
+            model = model.build_model()
+        parallel_model = keras.utils.multi_gpu_model(model, Config.gpu_count)
+        parallel_model.compile(optimizer=optimizer,
+                               loss={'Detection_output': detection_loss,
+                                     'Classification_output': classification_loss},
+                               metrics=['accuracy'])
+    else:
+        model = model.build_model()
+        model.compile(optimizer=optimizer,
                       loss={'Detection_output': detection_loss,
                             'Classification_output': classification_loss},
                       metrics=['accuracy'])
+    if summary:
+        model.summary()
     return model
 
 
 if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    L2WEIGHT = 0.5
+    L2WEIGHT = 1
     CROP_SIZE = 64
-    BATCH_SIZE = 1
-    EPOCHS = 300
+    BATCH_SIZE = Config.image_per_gpu * Config.gpu_count
+    EPOCHS = 500
     TRAIN_STEP_PER_EPOCH = 20
     DET_LOSS_HYPER = 1
-    model = SFCNnetwork(l2_regularizer=L2WEIGHT)
     data = data_prepare(print_input_shape=True, print_image_shape=True)
-    model = model_compile(model, summary=True)
+    model = gpu_compile(summary=True)
 
     model.fit_generator(generator_with_aug(data[0], data[1], data[2], crop_size=CROP_SIZE, batch_size=BATCH_SIZE),
                         epochs=EPOCHS,
