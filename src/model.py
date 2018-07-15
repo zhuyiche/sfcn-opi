@@ -13,7 +13,6 @@ from keras.regularizers import l2
 from keras.callbacks import EarlyStopping,TensorBoard,ModelCheckpoint,ReduceLROnPlateau
 from keras.preprocessing.image import ImageDataGenerator
 import keras.backend as K
-import util
 from util import load_data
 import os, time
 from image_augmentation import ImageCropping, ImageAugmentation
@@ -32,8 +31,6 @@ if ROOT_DIR.endswith('src'):
 DATA_DIR = os.path.join(ROOT_DIR, 'CRCHistoPhenotypes_2016_04_28', 'cls_and_det')
 TENSORBOARD_DIR = os.path.join(ROOT_DIR, 'tensorboard_logs')
 CHECKPOINT_DIR = os.path.join(ROOT_DIR, 'checkpoint')
-#TENSORBOARD_CLS_DIR = os.path.join(ROOT_DIR, 'tensorboard_logs', 'cls')
-#CHECKPOINT_CLS_DIR = os.path.join(ROOT_DIR, 'checkpoint', 'cls')
 
 class SFCNnetwork:
 
@@ -82,6 +79,7 @@ class SFCNnetwork:
         x = Activation('relu', name='act_1')(x)
         return x
 
+    ######################--ResNet components--#####################
     def identity_block(self, f, kernel_size, stage, block, inputs):
         """
         :param f: number of filters
@@ -139,7 +137,7 @@ class SFCNnetwork:
                     x = self.identity_block(f=filter, kernel_size=kernel_size,
                                             stage=stage, block=block, inputs=x)
         return x
-
+    ##################--FCN-BACKBONE--####################
     def first_and_second_res_blocks(self, inputs, first_filter, second_filter, kernel_size):
         """
         Shared residual blocks for detection and classification layers.
@@ -149,6 +147,8 @@ class SFCNnetwork:
         return x
 
     def classification_branch(self, input, filter):
+        """classification branch, sepreate from detection branch.
+        """
         x = self.res_block(input, filter=filter, kernel_size=3, stages=9, block=4)
         #all layers before OPI
         x = Conv2D(filters=5, kernel_size=1, padding='same', name='conv2d_after_fourth_res_block')(x)
@@ -212,6 +212,8 @@ class SFCNnetwork:
 
 
 class TimerCallback(Callback):
+    """Tracking time spend on each epoch as well as whole training process.
+    """
     def __init__(self):
         super(TimerCallback, self).__init__()
         self.epoch_time = 0
@@ -340,13 +342,13 @@ def generator_with_aug(features, det_labels, cls_labels, batch_size, crop_size,
                 det_label_index = det_labels[index]
                 cls_label_index = cls_labels[index]
                 feature, det_label, cls_label = crop_on_fly(feature_index, det_label_index, cls_label_index, crop_size = crop_size)
-                print('feature.shape: ', feature.shape, ' det_label_index: ',det_label_index.shape)
+                print('feature.shape: ', feature.shape, ' det_label_index: ',det_label.shape)
                 for k in range(aug_num):
                     aug_feature, aug_det_label, aug_cls_label = aug_on_fly(feature, det_label, cls_label)
                     batch_features[counter] = aug_feature
                     batch_det_labels[counter] = aug_det_label
                     batch_cls_labels[counter] = aug_cls_label
-                    counter += 1
+                    counter = counter + 1
         yield(batch_features, {'Detection_output': batch_det_labels,
                                'Classification_output': batch_cls_labels})
 
@@ -363,20 +365,24 @@ def generator_without_aug(features, det_labels, cls_labels, batch_size, crop_siz
             for j in range(crop_num):
                 feature, det_label, cls_label = crop_on_fly(features[index],
                                                             det_labels[index], cls_labels[index], crop_size=crop_size)
-                print('feature shape: ', feature.shape, 'det_label shape: ', det_label.shape, 'cls_label shape: ', cls_label.shape)
                 batch_features[counter] = feature
-                batch_det_labels[counter] = det_labels
-                batch_cls_labels[counter] = cls_labels
+                batch_det_labels[counter] = det_label
+                batch_cls_labels[counter] = cls_label
                 counter += 1
         yield batch_features, {'Detection_output': batch_det_labels,
                                'Classification_output': batch_cls_labels}
 
+
 def callback_preparation(model):
+    """
+    implement necessary callbacks into model.
+    :return: list of callback.
+    """
     timer = TimerCallback()
     timer.set_model(model)
-    tensorboard = TensorBoard(TENSORBOARD_DIR)
+    tensorboard_callback = TensorBoard(TENSORBOARD_DIR)
     checkpoint_callback = ModelCheckpoint(os.path.join(CHECKPOINT_DIR, 'det_train_point.h5'), save_best_only=True, period=1)
-    return [tensorboard, checkpoint_callback, timer]
+    return [tensorboard_callback, checkpoint_callback, timer]
 
 
 def model_compile(model_input, summary=False):
@@ -393,14 +399,8 @@ def model_compile(model_input, summary=False):
     return model
 
 
-def set_gpu(num):
-    import os
-    os.environ['CUDA_VISIBLE_DEVICES'] = str(num)
-
-
 if __name__ == '__main__':
-    import os
-    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     model = SFCNnetwork()
     data = data_prepare(print_input_shape=True, print_image_shape=True)
     model = model_compile(model)
@@ -413,9 +413,9 @@ if __name__ == '__main__':
     EPOCHS = 300
     TRAIN_STEP_PER_EPOCH = 30
 
-    model.fit_generator(generator_without_aug(data[0], data[1], data[2], crop_size=CROP_SIZE, batch_size=BATCH_SIZE),
+    model.fit_generator(generator_with_aug(data[0], data[1], data[2], crop_size=CROP_SIZE, batch_size=BATCH_SIZE),
                         epochs=EPOCHS,
                         steps_per_epoch=TRAIN_STEP_PER_EPOCH,
-                        validation_data=generator_without_aug(data[3], data[4], data[5], batch_size=2, crop_size=CROP_SIZE),
-                        validation_steps=5, callbacks=[timer, tensorboard_callback, checkpoint_callback])
+                        validation_data=generator_with_aug(data[3], data[4], data[5], batch_size=2, crop_size=CROP_SIZE),
+                        validation_steps=5, callbacks=callback_preparation(model))
     model.save_weights(os.path.join(ROOT_DIR, 'model_weights', 'after300-sfcn-opi-train_model.h5'))
