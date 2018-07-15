@@ -1,7 +1,7 @@
 import os
 import numpy as np
 from keras import models
-from model import SCFNnetwork
+from model import SFCNnetwork
 
 epsilon = 1e-7
 ROOT_DIR = os.getcwd()

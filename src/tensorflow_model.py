@@ -3,9 +3,9 @@ import cv2
 import tensorflow as tf
 from util import load_data
 from keras.utils import plot_model,np_utils
-from util import next_batch
+#from util import next_batch
 import numpy as np
-
+'''
 class SCFNnetwork():
     def __init__(self, input_shape = (64, 64, 3)):
         self.input_shape = input_shape
@@ -177,7 +177,5 @@ if __name__ == '__main__':
                 train_imgs_holder: batch_xs,
                 train_det_masks_holder: batch_ys,
             })
-
-
-
-        print('epoch: {}, train: {}, valid: {}'.format(epoch, train_acc, acc))
+            '''
+        #print('epoch: {}, train: {}, valid: {}'.format(epoch, train_acc, acc)) ''

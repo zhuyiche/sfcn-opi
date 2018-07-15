@@ -269,8 +269,8 @@ def load_data(data_path, type):
                 imgs.append(img)
             elif 'detection.bmp' in img_file:
                 det_mask_path = os.path.join(path, file, img_file)
-                det_mask = skimage.io.imread(det_mask_path, True).astype(np.bool)
-                #det_mask = cv2.imread(det_mask_path, 0)
+                #det_mask = skimage.io.imread(det_mask_path, True).astype(np.bool)
+                det_mask = cv2.imread(det_mask_path, 0)
                 det_masks.append(det_mask)
             elif 'classification.bmp' in img_file:
                 cls_mask_path = os.path.join(path, file, img_file)
@@ -344,6 +344,7 @@ def mask_to_corrdinates(mask):
         c = (a[1][i], num)
         x.append(c)
     print(x)
+
 
 
 if __name__ == '__main__':

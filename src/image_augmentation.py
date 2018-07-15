@@ -23,8 +23,8 @@ class ImageCropping:
 
         max_x = ori_width - des_width
         max_y = ori_height - des_height
-        ran_x = randint(0, max_x)
-        ran_y = randint(0, max_y)
+        ran_x = np.random.randint(0, max_x)
+        ran_y = np.random.randint(0, max_y)
         cropped_x = ran_x + des_width
         cropped_y = ran_y + des_height
         cropped_img = image[:, ran_x:cropped_x, ran_y:cropped_y]
@@ -32,8 +32,8 @@ class ImageCropping:
             if if_det and if_cls:
                 det_mask = masks[0]
                 cls_mask = masks[1]
-                cropped_det_mask = det_mask[:, ran_x:cropped_x, ran_y:cropped_y, 2]
-                cropped_cls_mask = cls_mask[:, ran_x:cropped_x, ran_y:cropped_y, 2]
+                cropped_det_mask = det_mask[:, ran_x:cropped_x, ran_y:cropped_y]
+                cropped_cls_mask = cls_mask[:, ran_x:cropped_x, ran_y:cropped_y]
                 return cropped_img, cropped_det_mask, cropped_cls_mask
             elif if_det and not if_cls:
                 det_mask = masks
@@ -116,19 +116,12 @@ class ImageCropping:
 
 
 class ImageAugmentation:
-    def __init__(self, data_path, old_filename, new_filename):
-        self.data_path = data_path
-        self.old_filename = '{}/{}'.format(data_path, old_filename)
-        self.new_filename = '{}/{}'.format(data_path, new_filename)
-        dm.check_directory(self.new_filename)
-        dm.initialize_train_test_folder(self.new_filename)
-
-    def image_basic_augmentation(self, image, masks,
-                                 ratio_operations=0.5):
+    @staticmethod
+    def image_basic_augmentation(image, masks): #ratio_operations=0.5):
         # without additional operations
         # according to the paper, operations such as shearing, fliping horizontal/vertical,
         # rotating, zooming and channel shifting will be apply
-        sometimes = lambda aug: iaa.Sometimes(ratio_operations, aug)
+        #sometimes = lambda aug: iaa.Sometimes(ratio_operations, aug)
         hor_flip_angle = np.random.uniform(0, 1)
         ver_flip_angle = np.random.uniform(0, 1)
         seq = iaa.Sequential([
@@ -147,50 +140,6 @@ class ImageAugmentation:
         aug_det_mask = seq_to_deterministic.augment_image(det_mask)
         aug_cls_mask = seq_to_deterministic.augment_image(cls_mask)
         return aug_img, aug_det_mask, aug_cls_mask
-
-    def batch_augmentation(self, oper_per_image=5, files = ['validation', 'test','train']):
-        """
-        :param oper_per_image: how many augmentation do on each cropped image
-        :param files:
-        :return:
-        """
-        for file in files:
-            old_file_name = '{}/{}'.format(self.old_filename, file)
-            new_file_name = '{}/{}'.format(self.new_filename, file)
-            counter = 0
-            num_image = 0
-            for _ in os.listdir(old_file_name):
-                num_image += 1
-            print(file)
-            print(num_image)
-            for i in range(1, num_image):
-                print(i)
-                read_img = '{}/img{}/img{}.bmp'.format(old_file_name, i, i)
-                read_det_mask = '{}/img{}/mask/detection/det_img{}.png'.format(old_file_name, i, i)
-                read_cls_mask = '{}/img{}/mask/classification/cls_img{}.png'.format(old_file_name, i, i)
-
-                img = cv2.imread(read_img)
-                det_mask = cv2.imread(read_det_mask)
-                cls_mask = cv2.imread(read_cls_mask)
-                masks = []
-                masks.append(det_mask)
-                masks.append(cls_mask)
-                for j in range(1, oper_per_image):
-                    counter = counter + 1
-                    aug_img, aug_det_mask, aug_cls_mask = self.image_basic_augmentation(img, masks)
-                    save_img = '{}/img{}/img{}.bmp'.format(new_file_name, counter, counter)
-                    save_mask = '{}/img{}/mask'.format(new_file_name, counter)
-                    dm.check_directory(save_mask)
-                    save_det_folder = '{}/detection'.format(save_mask)
-                    save_cls_folder = '{}/classification'.format(save_mask)
-                    dm.check_directory(save_det_folder)
-                    dm.check_directory(save_cls_folder)
-                    save_det_mask = '{}/det_img{}.png'.format(save_det_folder, counter)
-                    save_cls_mask = '{}/cls_img{}.png'.format(save_cls_folder, counter)
-                    cv2.imwrite(save_img, aug_img)
-                    cv2.imwrite(save_det_mask, aug_det_mask)
-                    cv2.imwrite(save_cls_mask, aug_cls_mask)
-        return counter
 
 if __name__ == '__main__':
     path = '/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28'
