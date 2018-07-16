@@ -1,19 +1,17 @@
 import numpy as np
 import tensorflow as tf
 import keras
-from keras.layers import BatchNormalization, Input, Conv2D, Activation, Add, Conv2DTranspose, Merge
-from keras.regularizers import l2
-from keras.layers import Input,Conv2D,Add,BatchNormalization,Activation, Lambda
+from keras.layers import Input,Conv2D,Add,BatchNormalization,Activation, Lambda, Multiply, Conv2DTranspose
 from keras.models import Model
 from keras.utils import plot_model,np_utils
 from keras.optimizers import SGD
 from keras.callbacks import EarlyStopping,TensorBoard,ModelCheckpoint,ReduceLROnPlateau, Callback
 from util import load_data
 import os, time
-from image_augmentation import ImageCropping, ImageAugmentation
+from image_augmentation import ImageCropping
 from imgaug import augmenters as iaa
 import imgaug as ia
-from loss import detection_loss, classification_loss
+from loss import detection_loss_weight, classification_loss_weight, joint_loss_weight
 from config import Config
 
 weight_decay = 0.005
@@ -69,150 +67,228 @@ class SFCNnetwork:
     """
     Backbone of SFCN-OPI.
     """
-    def __init__(self, l2_regularizer, input_shape = (64, 64, 3)):
-        #self.inputs = inputs
+    def __init__(self, l2_regularizer, input_shape=(64, 64, 3)):
+        # self.inputs = inputs
         self.input_shape = input_shape
-        self.l2_regularizer = l2_regularizer
+        self.l2r = l2_regularizer
 
-    def first_layer(self, inputs, kernel_size):
+    def first_layer(self, inputs, trainable=True):
         """
         First convolution layer.
         """
-        x = Conv3l2(filters=32, input_shape = self.input_shape, name='Conv_1', kernel_regularizer_weight=self.l2_regularizer)(inputs)
-        x = BatchNormalization(name='BN_1')(x)
-        x = Activation('relu', name='act_1')(x)
+        x = Conv3l2(filters=32, name='Conv_1',
+                    kernel_regularizer_weight=self.l2r,
+                    trainable=trainable)(inputs)
+        x = BatchNormalization(name='BN_1',trainable=trainable)(x)
+        x = Activation('relu', name='act_1',trainable=trainable)(x)
         return x
 
 
     ###########################################
     # ResNet Graph
     ###########################################
-    def identity_block(self, f, stage, block, inputs):
+    def identity_block(self, f, stage, block, inputs, trainable=True):
         """
         :param f: number of filters
         :param stage: stage of residual blocks
         :param block: ith module
+        :param trainable: freeze layer if false
         """
         x_shortcut = inputs
 
-        x = Conv3l2(filters=f, kernel_regularizer_weight=self.l2_regularizer,
-                    name=str(block)+'_'+str(stage) + '_idblock_conv_1')(inputs)
-        x = BatchNormalization(name=str(block)+'_'+str(stage) +'_idblock_BN_1')(x)
-        x = Activation('relu', name=str(block)+'_'+str(stage) + '_idblock_act_1')(x)
+        x = Conv3l2(filters=f, kernel_regularizer_weight=self.l2r,
+                    name=str(block)+'_'+str(stage) + '_idblock_conv_1',
+                    trainable=trainable)(inputs)
+        x = BatchNormalization(name=str(block)+'_'+str(stage) +'_idblock_BN_1',
+                               trainable=trainable)(x)
+        x = Activation('relu', name=str(block)+'_'+str(stage) + '_idblock_act_1',
+                       trainable=trainable)(x)
 
-        x = Conv3l2(filters=f, kernel_regularizer_weight=self.l2_regularizer,
+        x = Conv3l2(filters=f, kernel_regularizer_weight=self.l2r,
                     name=str(block)+'_'+str(stage) + '_idblock_conv_2')(x)
-        x = BatchNormalization(name=str(block)+'_'+str(stage) + '_idblock_BN_2')(x)
-        x = Add(name=str(block)+'_'+str(stage) + '_idblock_add')([x, x_shortcut])
-        x = Activation('relu', name=str(block)+'_'+str(stage)+ '_idblock_act_2')(x)
+        x = BatchNormalization(name=str(block)+'_'+str(stage) + '_idblock_BN_2',
+                               trainable=trainable)(x)
+        x = Add(name=str(block)+'_'+str(stage) + '_idblock_add',trainable=trainable)([x, x_shortcut])
+        x = Activation('relu', name=str(block)+'_'+str(stage)+ '_idblock_act_2',
+                       trainable=trainable)(x)
         return x
 
-    def convolution_block(self, f, stage, block, inputs):
+    def convolution_block(self, f, stage, block, inputs, trainable=True):
         """
         :param f: number of filters
         :param stage: stage of residual blocks
         :param block: ith module
         """
-        x = Conv3l2(filters=f, strides=(2,2), kernel_regularizer_weight=self.l2_regularizer,
-                   name=str(block)+'_'+str(stage) + '_convblock_conv_1')(inputs)
-        x = BatchNormalization(name=str(block)+'_'+str(stage) + '_convblock_BN_1')(x)
-        x = Activation('relu', name=str(block)+'_'+str(stage) + '_convblock_act_1')(x)
-
-        x = Conv3l2(filters=f, kernel_regularizer_weight=self.l2_regularizer,
-                   name=str(block) + '_' + str(stage) + '_convblock_conv_2')(x)
-        x = BatchNormalization(name=str(block)+'_'+str(stage) + '_convblock_BN_2')(x)
+        x = Conv3l2(filters=f, strides=(2,2), kernel_regularizer_weight=self.l2r,
+                    name=str(block)+'_'+str(stage) + '_convblock_conv_1',
+                    trainable=trainable)(inputs)
+        x = BatchNormalization(name=str(block)+'_'+str(stage) + '_convblock_BN_1',
+                               trainable=trainable)(x)
+        x = Activation('relu', name=str(block)+'_'+str(stage) + '_convblock_act_1',
+                       trainable=trainable)(x)
+        x = Conv3l2(filters=f, kernel_regularizer_weight=self.l2r,
+                   name=str(block) + '_' + str(stage) + '_convblock_conv_2',
+                    trainable=trainable)(x)
+        x = BatchNormalization(name=str(block)+'_'+str(stage) + '_convblock_BN_2',
+                               trainable=trainable)(x)
 
         x_shortcut = Conv2D(f, kernel_size=(1,1), strides=(2,2), padding='same',
-                            kernel_regularizer=keras.regularizers.l2(self.l2_regularizer),
-                            name=str(block)+'_'+str(stage) + '_convblock_shortcut_conv')(inputs)
-        x_shortcut = BatchNormalization(name = str(block)+'_'+str(stage) + '_convblock_shortcut_BN_1')(x_shortcut)
-        x = Add(name= str(block) + '_'+str(stage) + '_convblock_add')([x, x_shortcut])
-        x = Activation('relu', name = str(block) + '_' + str(stage) + '_convblock_merge_act')(x)
+                            kernel_regularizer=keras.regularizers.l2(self.l2r),
+                            name=str(block)+'_'+str(stage) + '_convblock_shortcut_conv',
+                            trainable=trainable)(inputs)
+        x_shortcut = BatchNormalization(name = str(block)+'_'+str(stage) + '_convblock_shortcut_BN_1',
+                                        trainable=trainable)(x_shortcut)
+        x = Add(name= str(block) + '_'+str(stage) + '_convblock_add',
+                trainable=trainable)([x, x_shortcut])
+        x = Activation('relu', name = str(block) + '_' + str(stage) + '_convblock_merge_act',
+                       trainable=trainable)(x)
         return x
 
-    def res_block(self, inputs, filter, stages, block, if_conv = False):
+    def res_block(self, inputs, filter, stages, block, trainable=True, if_conv=False):
         x = inputs
-        if not if_conv:
+        if not if_conv: #if_conv is False
             for stage in range(stages):
-                x = self.identity_block(f=filter, stage=stage, block=block, inputs=x)
+                x = self.identity_block(f=filter, stage=stage, block=block,
+                                        inputs=x, trainable=trainable)
         else:
             for stage in range(stages):
                 if stage == 0:
-                    x = self.convolution_block(f=filter, stage=stage, block=block, inputs=inputs)
+                    x = self.convolution_block(f=filter, stage=stage, block=block, inputs=inputs,
+                                               trainable=trainable)
                 else:
-                    x = self.identity_block(f=filter, stage=stage, block=block, inputs=x)
+                    x = self.identity_block(f=filter, stage=stage, block=block, inputs=x,
+                                            trainable=trainable)
         return x
-    ##################--FCN-BACKBONE--####################
-    def first_and_second_res_blocks(self, inputs, first_filter, second_filter):
+
+    ######################
+    # FCN BACKBONE
+    # ####################
+    def first_and_second_res_blocks(self, inputs, first_filter, second_filter, trainable=True):
         """
         Shared residual blocks for detection and classification layers.
         """
-        x = self.res_block(inputs, filter=first_filter, stages=9, block=1)
-        x = self.res_block(x, filter=second_filter, stages=9, block=2, if_conv=True)
+        x = self.res_block(inputs, filter=first_filter, stages=9, block=1,
+                           trainable=trainable)
+        x = self.res_block(x, filter=second_filter, stages=9, block=2, if_conv=True,
+                           trainable=trainable)
         return x
 
-    def classification_branch(self, input, filter):
-        """classification branch, sepreate from detection branch.
-        """
-        x = self.res_block(input, filter=filter, stages=9, block=4)
-        #all layers before OPI
-        x = Conv2D(filters=5, kernel_size=(1,1), padding='same', name='conv2d_after_fourth_res_block',
-                   kernel_regularizer=keras.regularizers.l2(self.l2_regularizer))(x)
+    def share_layer(self, input, trainable=True):
+        with tf.variable_scope("shared_layer"):
+            x = self.first_layer(input, trainable=trainable)
+            x_future_det_one = self.first_and_second_res_blocks(x, 32, 64, trainable=trainable)
+            x_future_cls_det_two = self.res_block(x_future_det_one, filter=128, stages=9, block=3, if_conv=True,
+                                                  trainable=trainable)
+            print(tf.variable_scope("shared_layer"))
+        return x_future_det_one, x_future_cls_det_two
+
+    ###################
+    # Detection Branch
+    ###################
+    def detection_branch_wrapper(self, input_one, input_two, trainable=True):
+        x_divergent_one = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
+                                 name='conv2D_diverge_one',
+                                 trainable=trainable)(input_one)
+        x_divergent_one = BatchNormalization(name='bn_diverge_one',
+                                             trainable=trainable)(x_divergent_one)
+        x_divergent_one = Activation('relu', trainable=trainable)(x_divergent_one)
+
+        x_divergent_two = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
+                                 kernel_regularizer=keras.regularizers.l2(self.l2r),
+                                 name='conv_diverge_two',
+                                 trainable=trainable)(input_two)
+        x_divergent_two = BatchNormalization(name='bn_diverge_two',
+                                             trainable=trainable)(x_divergent_two)
+        x_divergent_two = Activation('relu',
+                                     trainable=trainable)(x_divergent_two)
+
+        x_divergent_two = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2), padding='same',
+                                          kernel_regularizer=keras.regularizers.l2(self.l2r),
+                                          name='deconv_before_summation',
+                                          trainable=trainable)(x_divergent_two)
+        x_divergent_two = BatchNormalization(name='bn_deconv_diverge_two',
+                                             trainable=trainable)(x_divergent_two)
+        x_divergent_two = Activation('relu', name='last_detection_act',
+                                     trainable=trainable)(x_divergent_two)
+
+        x_merge = Add(name='merge_two_divergence',
+                      trainable=trainable)([x_divergent_one, x_divergent_two])
+        x_detection = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2), padding='same',
+                                      kernel_regularizer=keras.regularizers.l2(self.l2r),
+                                      name='Deconv_detection_final_layer',
+                                      trainable=trainable)(x_merge)
+        x_detection = BatchNormalization(name='last_detection_bn',
+                                         trainable=trainable)(x_detection)
+        # The detection output
+        x_detection = Activation('softmax', name='Detection_output',
+                                 trainable=trainable)(x_detection)
+        return x_detection
+
+    def detection_branch(self, trainable=True):
+        with tf.variable_scope("detection_branch"):
+            input_img = Input(shape=self.input_shape)
+            x_future_det_one, x_future_cls_det_two = self.share_layer(input_img, trainable=trainable)
+            # The detection output
+            x_detection = self.detection_branch_wrapper(x_future_det_one, x_future_cls_det_two)
+            # The classification output
+            print('trainable_layer: ', tf.trainable_variables())
+            det_model = Model(inputs=input_img,
+                          outputs=x_detection)
+            return det_model
+
+    ############################
+    # Classification Branch
+    ############################
+    def classification_branch_wrapper(self, input):
+        x = self.res_block(input, filter=128, stages=9, block=4)
+        # all layers before OPI
+        x = Conv2D(filters=5, kernel_size=(1, 1), padding='same', name='conv2d_after_fourth_res_block',
+                   kernel_regularizer=keras.regularizers.l2(self.l2r))(x)
         x = BatchNormalization(name='bn_after_fourth_res_block')(x)
         x = Activation('relu')(x)
-        x = Conv2DTranspose(filters=5, kernel_size=(3,3),
+        x = Conv2DTranspose(filters=5, kernel_size=(3, 3),
                             strides=(2, 2), padding='same',
-                            kernel_regularizer=keras.regularizers.l2(self.l2_regularizer),
+                            kernel_regularizer=keras.regularizers.l2(self.l2r),
                             name='second_deconv_before_cls')(x)
         x = BatchNormalization()(x)
         x = Activation('relu')(x)
         x = Conv2DTranspose(filters=5, kernel_size=(3, 3),
                             strides=(2, 2), padding='same',
-                            kernel_regularizer=keras.regularizers.l2(self.l2_regularizer),
+                            kernel_regularizer=keras.regularizers.l2(self.l2r),
                             name='first_deconv_before_cls')(x)
-        x_output = BatchNormalization()(x)
-        #x_output = Activation('softmax', name='Classification_output')(x)
+        x = BatchNormalization()(x)
+        x_output = Activation('softmax', name='Classification_output')(x)
         return x_output
 
-    def build_model(self, kernel_size=3):
+    def classification_branch(self, trainable=False):
+        """classification branch, seprate from detection branch.
+        """
         input_img = Input(shape=self.input_shape)
-        x = self.first_layer(input_img, kernel_size)
-        x = self.first_and_second_res_blocks(x, 32, 64)
+        # this shared layer is frozen before joint training
+        x_useless, x_cls = self.share_layer(input_img, trainable=trainable)
+        cls_output = self.classification_branch_wrapper(x_cls)
+        cls_model = Model(inputs=input_img,
+                          outputs=cls_output)
+        return cls_model
 
-        x_divergent_one = x
-        x_divergent_one = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
-                                 name='conv2D_diverge_one')(x_divergent_one)
-        x_divergent_one = BatchNormalization(name='bn_diverge_one')(x_divergent_one)
-        x_divergent_one = Activation('relu')(x_divergent_one)
+    #########################
+    # Joint training
+    #########################
+    def joint_branch(self, trainable=True):
+        """
+        joint branch of detection and classification
+        :param trainable: unfreeze detection branch layer if set to true
+        """
+        input_img = Input(shape=self.input_shape)
+        x_future_det_one, x_future_cls_det_two = self.share_layer(input_img, trainable=trainable)
+        x_detection = self.detection_branch_wrapper(x_future_det_one, x_future_cls_det_two, trainable=trainable)
+        x_classification = self.classification_branch_wrapper(x_future_cls_det_two)
+        joint_x = Multiply()([x_detection, x_classification])
+        input_img = Input(shape=self.input_shape)
 
-        x_for_future_classification = self.res_block(x, filter=128, stages=9, block=3, if_conv=True)
-
-        #these are detection branch
-        x_divergent_two = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
-                                 kernel_regularizer=keras.regularizers.l2(self.l2_regularizer),
-                                 name='conv_diverge_two')(x_for_future_classification)
-        x_divergent_two = BatchNormalization(name='bn_diverge_two')(x_divergent_two)
-        x_divergent_two = Activation('relu')(x_divergent_two)
-        x_divergent_two = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2), padding='same',
-                                          kernel_regularizer=keras.regularizers.l2(self.l2_regularizer),
-                                          name='deconv_before_summation')(x_divergent_two)
-        x_divergent_two = BatchNormalization(name='bn_deconv_diverge_two')(x_divergent_two)
-        x_divergent_two = Activation('relu', name='last_detection_act')(x_divergent_two)
-
-        x_merge = Add(name='merge_two_divergence')([x_divergent_one, x_divergent_two])
-        x_detection = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2), padding='same',
-                                      kernel_regularizer=keras.regularizers.l2(self.l2_regularizer),
-                                      name='Deconv_detection_final_layer')(x_merge)
-        x_detection = BatchNormalization(name='last_detection_bn')(x_detection)
-        # The detection output
-        x_detection = Activation('softmax', name = 'Detection_output')(x_detection)
-        # The classification output
-        x_classification_nobn= self.classification_branch(x_for_future_classification, filter=128)
-        x_classification = Activation('softmax', name='Classification_output')(x_classification_nobn)
-
-        model = Model(inputs=input_img,
-                      outputs=[x_detection, x_classification])
-        return model
+        joint_model = Model(inputs=input_img,
+                            outputs=joint_x)
+        return joint_model
 
 
 class TimerCallback(Callback):
@@ -325,7 +401,8 @@ def aug_on_fly(img, det_mask, cls_mask, ):
 
 
 def generator_with_aug(features, det_labels, cls_labels, batch_size, crop_size,
-                          crop_num=18, aug_num=4):
+                       type,
+                       crop_num=15, aug_num=10):
     """
     generator with basic augmentations which have been in the paper.
     :param features: image.
@@ -333,9 +410,11 @@ def generator_with_aug(features, det_labels, cls_labels, batch_size, crop_size,
     :param cls_labels: classification mask as label
     :param batch_size: batch size
     :param crop_size: default size is 64
+    :param type: type must be one of detection, classification or joint
     :param crop_num: how many cropped image for a single image.
     :param aug_num: num of augmentation per cropped image
     """
+    assert type in ['detection', 'classification', 'joint']
     batch_features = np.zeros((batch_size * crop_num * aug_num, crop_size, crop_size, 3))
     batch_det_labels = np.zeros((batch_size * crop_num * aug_num, crop_size, crop_size, 2))
     batch_cls_labels = np.zeros((batch_size * crop_num * aug_num, crop_size, crop_size, 5))
@@ -354,8 +433,10 @@ def generator_with_aug(features, det_labels, cls_labels, batch_size, crop_size,
                     batch_det_labels[counter] = aug_det_label
                     batch_cls_labels[counter] = aug_cls_label
                     counter = counter + 1
-        yield(batch_features, {'Detection_output': batch_det_labels,
-                               'Classification_output': batch_cls_labels})
+        if type == 'detection':
+            yield batch_features, batch_det_labels
+        elif type == 'classification' or type == 'joint':
+            yield batch_features, batch_cls_labels
 
 
 def generator_without_aug(features, det_labels, cls_labels, batch_size, crop_size,
@@ -384,7 +465,8 @@ def generator_without_aug(features, det_labels, cls_labels, batch_size, crop_siz
                 batch_cls_labels[counter] = cls_label
                 counter += 1
         yield batch_features, {'Detection_output': batch_det_labels,
-                               'Classification_output': batch_cls_labels}
+                               'Classification_output': batch_cls_labels,
+                               'Joint_output': batch_cls_labels}
 
 
 def callback_preparation(model):
@@ -395,54 +477,112 @@ def callback_preparation(model):
     timer = TimerCallback()
     timer.set_model(model)
     tensorboard_callback = TensorBoard(TENSORBOARD_DIR)
-    checkpoint_callback = ModelCheckpoint(os.path.join(CHECKPOINT_DIR, 'det_train_point.h5'), save_best_only=True, period=1)
+    checkpoint_callback = ModelCheckpoint(os.path.join(CHECKPOINT_DIR, 'train_point.h5'), save_best_only=True, period=1)
     return [tensorboard_callback, checkpoint_callback, timer]
 
 
-def gpu_compile(summary=False):
+def det_model_compile(nn, det_loss_weight,
+                      optimizer, summary=False):
     """
-    Assign mutiple gpu model if mutiple gpu will be use.
-    split batch size into gpu number, that is if four gpu has been used and batch size is 32,
-    for each gpu will have batch size of 8.
-    :param summary: show model summary if true
-    :return: model
+
+    :param det_loss_weight:
+    :param kernel_weight:
+    :param summary:
+    :return:
     """
-    model = SFCNnetwork(l2_regularizer=L2WEIGHT)
-    optimizer = SGD(lr=0.01, momentum=0.9, decay=1e-6, nesterov=True)
-    print('model is set')
-    if Config.gpu_count > 1:
-        with tf.device('/cpu:0'):
-            model = model.build_model()
-        parallel_model = keras.utils.multi_gpu_model(model, Config.gpu_count)
-        parallel_model.compile(optimizer=optimizer,
-                               loss={'Detection_output': detection_loss,
-                                     'Classification_output': classification_loss},
-                               metrics=['accuracy'])
-    else:
-        model = model.build_model()
-        model.compile(optimizer=optimizer,
-                      loss={'Detection_output': detection_loss,
-                            'Classification_output': classification_loss},
+    print('detection model is set')
+    det_model=nn.detection_branch()
+    det_model.compile(optimizer=optimizer,
+                      loss=detection_loss_weight(det_loss_weight),
                       metrics=['accuracy'])
-    if summary:
-        model.summary()
-    return model
+    if summary==True:
+        det_model.summary()
+    return det_model
+
+
+def cls_model_compile(nn, cls_loss_weight,
+                      optimizer, summary=False):
+    """
+
+    :param det_loss_weight:
+    :param kernel_weight:
+    :param summary:
+    :return:
+    """
+    print('classification model is set')
+    cls_model=nn.classification_branch(trainable=False)
+    cls_model.compile(optimizer=optimizer,
+                      loss=classification_loss_weight(cls_loss_weight),
+                      metrics=['accuracy'])
+    if summary==True:
+        cls_model.summary()
+    return cls_model
+
+
+def joint_model_compile(nn, det_loss_weight, cls_loss_in_joint, joint_loss_weight,
+                      optimizer, summary=False):
+    """
+
+    :param det_loss_weight:
+    :param kernel_weight:
+    :param summary:
+    :return:
+    """
+    print('classification model is set')
+    joint_model=nn.joint__branch()
+    joint_model.compile(optimizer=optimizer,
+                        loss=joint_loss_weight(det_loss_weight, cls_loss_in_joint, joint_loss_weight),
+                        metrics=['accuracy'])
+    if summary==True:
+        joint_model.summary()
+    return joint_model
+
+
+def tune_loss_weight():
+    """
+    use this function to fine tune weights later.
+    :return:
+    """
+    print('weight initialized')
+    cls_weight = [0.5, 0.9, 1.01, 0.68, 1.9]
+    det_weight = [0.2, 0.8]
+    cls_weight_in_joint = [0.5, 0.83, 0.94, 0.78, 2]
+    joint_weight = 1
+    kernel_weight = 1
+    return [det_weight, cls_weight, cls_weight_in_joint, joint_weight, kernel_weight]
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    L2WEIGHT = 1
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(Config.gpu)
+    weights = tune_loss_weight()
     CROP_SIZE = 64
     BATCH_SIZE = Config.image_per_gpu * Config.gpu_count
-    EPOCHS = 500
+    EPOCHS = 30
     TRAIN_STEP_PER_EPOCH = 20
-    DET_LOSS_HYPER = 1
-    data = data_prepare(print_input_shape=True, print_image_shape=True)
-    model = gpu_compile(summary=True)
 
-    model.fit_generator(generator_with_aug(data[0], data[1], data[2], crop_size=CROP_SIZE, batch_size=BATCH_SIZE),
-                        epochs=EPOCHS,
-                        steps_per_epoch=TRAIN_STEP_PER_EPOCH,
-                        validation_data=generator_with_aug(data[3], data[4], data[5], batch_size=BATCH_SIZE, crop_size=CROP_SIZE),
-                        validation_steps=5, callbacks=callback_preparation(model))
-    model.save_weights(os.path.join(ROOT_DIR, 'model_weights', 'after300-sfcn-opi-train_model.h5'))
+    data = data_prepare(print_input_shape=True, print_image_shape=True)
+    network = SFCNnetwork(l2_regularizer=weights[-1])
+    optimizer = SGD(lr=0.01, momentum=0.9, decay=1e-6, nesterov=True)
+
+    det_model = det_model_compile(nn=network, summary=True,
+                                  det_loss_weight=weights[0], optimizer=optimizer)
+
+    det_model.fit_generator(generator_with_aug(data[0], data[1], data[2], crop_size=CROP_SIZE, batch_size=BATCH_SIZE,
+                                               type='detection'),
+                            epochs=EPOCHS,
+                            steps_per_epoch=TRAIN_STEP_PER_EPOCH,
+                            validation_data=generator_with_aug(data[3], data[4], data[5],
+                                                               batch_size=BATCH_SIZE, crop_size=CROP_SIZE,
+                                                               type='detection'),
+                            validation_steps=5, callbacks=callback_preparation(det_model))
+
+    det_model.save_weights(os.path.join(ROOT_DIR, 'model_weights', 'det_train_model.h5'))
+
+    """
+    cls_model = cls_model_compile(nn=network, summary=True, cls_loss_weight=weights[1], optimizer=optimizer)
+    cls_model.save_weights(os.path.join(ROOT_DIR, 'model_weights', 'cls_train_model.h5'))
+
+
+    joint_model = joint_model_compile(nn=network, det_loss_weight=weights[0], cls_loss_in_joint=weights[2],
+                                      joint_loss_weight=weights[3], summary=True, optimizer=optimizer)
+                                      """

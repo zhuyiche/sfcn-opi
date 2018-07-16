@@ -113,32 +113,6 @@ def _reorder_image_files(datapath, files= ['train', 'test', 'validation']):
                 os.rename(d, new_file)
 
 
-
-def extract_bboxes(mask):
-    """Compute bounding boxes from masks.
-    mask: [height, width, num_instances]. Mask pixels are either 1 or 0.
-    Returns: bbox array [num_instances, (y1, x1, y2, x2)].
-    """
-    boxes = np.zeros([mask.shape[-1], 4], dtype=np.int32)
-    for i in range(mask.shape[-1]):
-        m = mask[:, :, i]
-        # Bounding box.
-        horizontal_indicies = np.where(np.any(m, axis=0))[0]
-        vertical_indicies = np.where(np.any(m, axis=1))[0]
-        if horizontal_indicies.shape[0]:
-            x1, x2 = horizontal_indicies[[0, -1]]
-            y1, y2 = vertical_indicies[[0, -1]]
-            # x2 and y2 should not be part of the box. Increment by 1.
-            x2 += 1
-            y2 += 1
-        else:
-            # No mask for this instance. Might happen due to
-            # resizing or cropping. Set bbox to zeros
-            x1, x2, y1, y2 = 0, 0, 0, 0
-        boxes[i] = np.array([y1, x1, y2, x2])
-    return boxes.astype(np.int32)
-
-
 def check_directory(file_path):
     """
     make new file on path if file is not already exist.
@@ -216,6 +190,7 @@ def _drawdots_on_origin_image(mats, usage, img, notation_type, color = ['yellow'
         _draw_points(mat_content, img, color[0], notation_type=notation_type)
     return img
 
+
 def create_binary_masks(mat):
     polygon = [(point[0], point[1]) for point in mat]
     #print(polygon)
@@ -255,7 +230,6 @@ def img_test(i, type):
     contrast2.enhance(20).show(imgc)
 
 
-
 def load_data(data_path, type):
     path = os.path.join(data_path, type)  # cls_and_det/train
     imgs, det_masks, cls_masks = [], [], []
@@ -285,6 +259,7 @@ def _image_normalization(image):
     img /= (np.std(img, keepdims=True) + 1e-7)
     return img
 
+
 class DataGenerator:
     def __init__(self, features, labels):
         self.features = features
@@ -292,6 +267,7 @@ class DataGenerator:
 
     #@staticmethod
     #def generator_without_augmentation():
+
 
 def get_metrics(gt, pred, r=3):
     # calculate precise, recall and f1 score

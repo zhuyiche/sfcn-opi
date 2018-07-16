@@ -115,32 +115,6 @@ class ImageCropping:
             print('there are {} cropped images for {}'.format(counter, file))
 
 
-class ImageAugmentation:
-    @staticmethod
-    def image_basic_augmentation(image, masks): #ratio_operations=0.5):
-        # without additional operations
-        # according to the paper, operations such as shearing, fliping horizontal/vertical,
-        # rotating, zooming and channel shifting will be apply
-        #sometimes = lambda aug: iaa.Sometimes(ratio_operations, aug)
-        hor_flip_angle = np.random.uniform(0, 1)
-        ver_flip_angle = np.random.uniform(0, 1)
-        seq = iaa.Sequential([
-            iaa.SomeOf((0, 5), [
-                iaa.Fliplr(hor_flip_angle),
-                iaa.Flipud(ver_flip_angle),
-                iaa.Affine(shear=(-16, 16)),
-                iaa.Affine(scale={'x': (1, 1.6), 'y': (1, 1.6)}),
-                iaa.PerspectiveTransform(scale=(0.01, 0.1))
-            ])
-        ])
-        det_mask, cls_mask = masks[0], masks[1]
-
-        seq_to_deterministic = seq.to_deterministic()
-        aug_img = seq_to_deterministic.augment_image(image)
-        aug_det_mask = seq_to_deterministic.augment_image(det_mask)
-        aug_cls_mask = seq_to_deterministic.augment_image(cls_mask)
-        return aug_img, aug_det_mask, aug_cls_mask
-
 if __name__ == '__main__':
     path = '/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28'
     new_file = 'Cropping'
