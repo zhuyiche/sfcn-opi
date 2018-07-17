@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 import keras
-from keras.layers import Input,Conv2D,Add,BatchNormalization,Activation, Lambda, Multiply, Conv2DTranspose, Concatenate
+from keras.layers import Input,Conv2D,Add,BatchNormalization,Activation, Lambda, Multiply, Conv2DTranspose
 from keras.models import Model
 from keras.utils import plot_model,np_utils
 from keras.optimizers import SGD
@@ -11,7 +11,7 @@ import os, time
 from image_augmentation import ImageCropping
 from imgaug import augmenters as iaa
 import imgaug as ia
-from loss import detection_loss, classification_loss, joint_loss
+from focal_loss import detection_loss, classification_loss, joint_loss
 from config import Config
 weight_decay = 0.005
 epsilon = 1e-7
@@ -433,10 +433,7 @@ def generator_with_aug(features, det_labels, cls_labels, batch_size, crop_size,
                 feature_index = features[index]
                 det_label_index = det_labels[index]
                 cls_label_index = cls_labels[index]
-                feature, det_label, cls_label = crop_on_fly(feature_index,
-                                                            det_label_index,
-                                                            cls_label_index,
-                                                            crop_size = crop_size)
+                feature, det_label, cls_label = crop_on_fly(feature_index, det_label_index, cls_label_index, crop_size = crop_size)
                 for k in range(aug_num):
                     aug_feature, aug_det_label, aug_cls_label = aug_on_fly(feature, det_label, cls_label)
                     batch_features[counter] = aug_feature
@@ -486,10 +483,15 @@ def callback_preparation(model):
     """
     timer = TimerCallback()
     timer.set_model(model)
-    tensorboard_callback = TensorBoard(os.path.join(TENSORBOARD_DIR, 'base_tensorboard_logs'))
-    checkpoint_callback = ModelCheckpoint(os.path.join(CHECKPOINT_DIR,'base_checkpoint',
+    tensorboard_callback = TensorBoard(os.path.join(TENSORBOARD_DIR, 'focal_tensorboard'))
+    checkpoint_callback = ModelCheckpoint(os.path.join(CHECKPOINT_DIR,'focal_checkpoint',
                                                        'train_point.h5'), save_best_only=True, period=1)
     return [tensorboard_callback, checkpoint_callback, timer]
+
+
+def multi_gpu(model):
+    parallel_model = keras.utils.multi_gpu_model(model, Config.gpu_count)
+    return parallel_model
 
 
 def det_model_compile(nn, det_loss_weight, softmax_trainable,
@@ -511,7 +513,7 @@ def det_model_compile(nn, det_loss_weight, softmax_trainable,
     return det_model
 
 
-def cls_model_compile(nn, cls_loss_weight, load_weights, softmax_trainable,
+def cls_model_compile(nn, cls_loss_weight, load_weights, smooth_loss, softmax_trainable,
                       optimizer, summary=False):
     """
 
@@ -524,14 +526,15 @@ def cls_model_compile(nn, cls_loss_weight, load_weights, softmax_trainable,
     cls_model=nn.classification_branch(trainable=False, softmax_trainable=softmax_trainable)
     cls_model.load_weights(load_weights, by_name=True)
     cls_model.compile(optimizer=optimizer,
-                      loss=classification_loss(cls_loss_weight),
+                      loss=classification_loss(cls_loss_weight,
+                                               smooth_factor=smooth_loss),
                       metrics=['accuracy'])
     if summary==True:
         cls_model.summary()
     return cls_model
 
 
-def joint_model_compile(nn, det_loss_weight, cls_loss_in_joint, joint_loss_weight,
+def joint_model_compile(nn, det_loss_weight, cls_loss_in_joint, smooth_loss, joint_loss_weight,
                         load_weights, softmax_trainable,
                         optimizer, summary=False):
     """
@@ -545,7 +548,8 @@ def joint_model_compile(nn, det_loss_weight, cls_loss_in_joint, joint_loss_weigh
     joint_model=nn.joint_branch(softmax_trainable=softmax_trainable)
     joint_model.load_weights(load_weights, by_name=True)
     joint_model.compile(optimizer=optimizer,
-                        loss=joint_loss(det_loss_weight, cls_loss_in_joint, joint_loss_weight),
+                        loss=joint_loss(det_loss_weight, cls_loss_in_joint,
+                                        joint_loss_weight, smooth_factor=smooth_loss),
                         metrics=['accuracy'])
     if summary==True:
         joint_model.summary()
@@ -563,21 +567,18 @@ def tune_loss_weight():
     cls_weight_in_joint = [0.5, 0.83, 0.94, 0.78, 2]
     joint_weight = 1
     kernel_weight = 1
-    cls_smooth_factor = [0.1, 0.4, 0.7, 0.9]
+    cls_smooth_factor = [0.5, 1, 3, 5, 7]
     return [det_weight, cls_weight, cls_weight_in_joint, joint_weight, kernel_weight]
 
 
 def save_model_weights(type, hyper):
     model_weights = os.path.join(ROOT_DIR, 'model_weights')
     det_model_weights_saver = os.path.join(model_weights,
-                                           str(type) + '_model_weights',
-                                           hyper + '_' + str(type) + '_det_train_model.h5')
+                                           str(type) + '_model_weights',hyper + '_' + str(type)+'_det_train_model.h5')
     cls_model_weights_saver = os.path.join(model_weights,
-                                           str(type) + '_model_weights',
-                                           hyper + '_' + str(type) + '_cls_train_model.h5')
+                                           str(type) + '_model_weights', hyper +'_'+str(type)+'_cls_train_model.h5')
     joint_model_weights_saver = os.path.join(model_weights,
-                                             str(type) + '_model_weights',
-                                             hyper + '_' + str(type) + '_joint_train_model.h5')
+                                             str(type) + '_model_weights', hyper +'_'+str(type) + '_joint_train_model.h5')
 
     return [det_model_weights_saver, cls_model_weights_saver, joint_model_weights_saver]
 
@@ -591,15 +592,18 @@ if __name__ == '__main__':
     TRAIN_STEP_PER_EPOCH = 20
     NUM_TO_CROP, NUM_TO_AUG = 20, 10
 
+
+
     data = data_prepare(print_input_shape=True, print_image_shape=True)
     network = SFCNnetwork(l2_regularizer=weights[-1])
     optimizer = SGD(lr=0.01, momentum=0.9, decay=1e-6, nesterov=True)
 
-    model_weights_saver = save_model_weights('base', str(EPOCHS))
+    model_weights_saver = save_model_weights('focal', str())
+
     if not os.path.exists(model_weights_saver[0]):
         det_model = det_model_compile(nn=network,
                                       det_loss_weight=weights[0], optimizer=optimizer, softmax_trainable=False)
-        print('base detection is training')
+        print('focal detection is training')
         det_model.fit_generator(generator_with_aug(data[0], data[1], data[2],
                                                    crop_size=CROP_SIZE,
                                                    batch_size=BATCH_SIZE,
@@ -615,41 +619,46 @@ if __name__ == '__main__':
 
         det_model.save_weights(model_weights_saver[0])
 
-    if not os.path.exists(model_weights_saver[1]):
-        print('base classification is training')
-        cls_model = cls_model_compile(nn=network, cls_loss_weight=weights[1],
-                                      optimizer=optimizer,
-                                      load_weights=model_weights_saver[0],
-                                      softmax_trainable=True)
-        cls_model.fit_generator(generator_with_aug(data[0], data[1], data[2],
-                                                   crop_size=CROP_SIZE,
-                                                   batch_size=BATCH_SIZE,
-                                                   crop_num=NUM_TO_CROP, aug_num=NUM_TO_AUG,
-                                                   type='detection'),
-                                epochs=EPOCHS,
-                                steps_per_epoch=TRAIN_STEP_PER_EPOCH,
-                                validation_data=generator_with_aug(data[3], data[4], data[5],
-                                                                   batch_size=BATCH_SIZE, crop_size=CROP_SIZE,
-                                                                   crop_num=NUM_TO_CROP, aug_num=NUM_TO_AUG,
-                                                                   type='classification'),
-                                validation_steps=5, callbacks=callback_preparation(cls_model))
-        cls_model.save_weights(model_weights_saver[1])
-    if not os.path.exists(model_weights_saver[2]):
-        print('base joint is training')
-        joint_model = joint_model_compile(nn=network, det_loss_weight=weights[0], cls_loss_in_joint=weights[2],
-                                          joint_loss_weight=weights[3],  optimizer=optimizer,
-                                          load_weights=model_weights_saver[1],
-                                           softmax_trainable=False)
-        joint_model.fit_generator(generator_with_aug(data[0], data[1], data[2],
-                                                     crop_size=CROP_SIZE,
-                                                     batch_size=BATCH_SIZE,
-                                                     crop_num=NUM_TO_CROP, aug_num=NUM_TO_AUG,
-                                                     type='joint'),
-                                  epochs=EPOCHS,
-                                  steps_per_epoch=TRAIN_STEP_PER_EPOCH,
-                                  validation_data=generator_with_aug(data[3], data[4], data[5],
-                                                                     batch_size=BATCH_SIZE, crop_size=CROP_SIZE,
-                                                                     crop_num=NUM_TO_CROP, aug_num=NUM_TO_AUG,
-                                                                     type='joint'),
-                                  validation_steps=5, callbacks=callback_preparation(joint_model))
-        joint_model.save_weights(model_weights_saver[2])
+    smoother = model_weights_saver[-1]
+    for i, smooth in enumerate(smoother):
+        cls_joint_model_weights = save_model_weights('focal', 'smoother_{}'.format(str(smooth)))
+        if not os.path.exists(cls_joint_model_weights[1]):
+            print('focal smoother {} classification is training'.format(str(smooth)))
+            cls_model = cls_model_compile(nn=network,  cls_loss_weight=weights[1],
+                                          optimizer=optimizer,
+                                          load_weights=model_weights_saver[0],
+                                          smooth_loss=smooth,
+                                          softmax_trainable=True)
+            cls_model.fit_generator(generator_with_aug(data[0], data[1], data[2],
+                                                       crop_size=CROP_SIZE,
+                                                       batch_size=BATCH_SIZE,
+                                                       crop_num=NUM_TO_CROP, aug_num=NUM_TO_AUG,
+                                                       type='detection'),
+                                    epochs=EPOCHS,
+                                    steps_per_epoch=TRAIN_STEP_PER_EPOCH,
+                                    validation_data=generator_with_aug(data[3], data[4], data[5],
+                                                                       batch_size=BATCH_SIZE, crop_size=CROP_SIZE,
+                                                                       crop_num=NUM_TO_CROP, aug_num=NUM_TO_AUG,
+                                                                       type='classification'),
+                                    validation_steps=5, callbacks=callback_preparation(cls_model))
+            cls_model.save_weights(model_weights_saver[1])
+        if not os.path.exists(cls_joint_model_weights[2]):
+            print('focal smoother {} joint is training'.format(str(smooth)))
+            joint_model = joint_model_compile(nn=network, det_loss_weight=weights[0], cls_loss_in_joint=weights[2],
+                                              joint_loss_weight=weights[3], optimizer=optimizer,
+                                              load_weights=cls_joint_model_weights[1],
+                                              smooth_loss=smooth, softmax_trainable=False)
+            joint_model.fit_generator(generator_with_aug(data[0], data[1], data[2],
+                                                       crop_size=CROP_SIZE,
+                                                       batch_size=BATCH_SIZE,
+                                                       crop_num=NUM_TO_CROP, aug_num=NUM_TO_AUG,
+                                                       type='joint'),
+                                    epochs=EPOCHS,
+                                    steps_per_epoch=TRAIN_STEP_PER_EPOCH,
+                                    validation_data=generator_with_aug(data[3], data[4], data[5],
+                                                                       batch_size=BATCH_SIZE, crop_size=CROP_SIZE,
+                                                                       crop_num=NUM_TO_CROP, aug_num=NUM_TO_AUG,
+                                                                       type='joint'),
+                                    validation_steps=5, callbacks=callback_preparation(joint_model))
+            joint_model.save_weights(model_weights_saver[2])
+

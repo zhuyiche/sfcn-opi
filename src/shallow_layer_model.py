@@ -1,7 +1,8 @@
 import numpy as np
 import tensorflow as tf
 import keras
-from keras.layers import Input,Conv2D,Add,BatchNormalization,Activation, Lambda, Multiply, Conv2DTranspose, Concatenate
+from keras.layers import Input,Conv2D,Add,BatchNormalization,Activation, Lambda, \
+    Multiply, Conv2DTranspose, Merge, Concatenate
 from keras.models import Model
 from keras.utils import plot_model,np_utils
 from keras.optimizers import SGD
@@ -166,20 +167,21 @@ class SFCNnetwork:
         """
         Shared residual blocks for detection and classification layers.
         """
-        x = self.res_block(inputs, filter=first_filter, stages=9, block=1,
+        x_first_block = self.res_block(inputs, filter=first_filter, stages=9, block=1,
                            trainable=trainable)
-        x = self.res_block(x, filter=second_filter, stages=9, block=2, if_conv=True,
+        x_second_block = self.res_block(x_first_block, filter=second_filter, stages=9, block=2, if_conv=True,
                            trainable=trainable)
-        return x
+
+        return x_first_block, x_second_block
 
     def share_layer(self, input, trainable=True):
         with tf.variable_scope("shared_layer"):
             x = self.first_layer(input, trainable=trainable)
-            x_future_det_one = self.first_and_second_res_blocks(x, 32, 64, trainable=trainable)
+            x_future_det_zero, x_future_det_one = self.first_and_second_res_blocks(x, 32, 64, trainable=trainable)
             x_future_cls_det_two = self.res_block(x_future_det_one, filter=128, stages=9, block=3, if_conv=True,
                                                   trainable=trainable)
             #print(tf.trainable_variables())
-        return x_future_det_one, x_future_cls_det_two
+        return x_future_det_one, x_future_det_one, x_future_cls_det_two
 
     ###################
     # Refined Detection Branch
@@ -190,7 +192,7 @@ class SFCNnetwork:
     ###################
     # Detection Branch
     ###################
-    def detection_branch_wrapper(self, input_one, input_two, trainable=True, softmax_trainable=False):
+    def detection_branch_wrapper(self, input_zero, input_one, input_two, trainable=True, softmax_trainable=False):
         x_divergent_one = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
                                  name='conv2D_diverge_one',
                                  trainable=trainable)(input_one)
@@ -215,9 +217,14 @@ class SFCNnetwork:
                                              trainable=trainable)(x_divergent_two)
         x_divergent_two = Activation('relu', name='last_detection_act',
                                      trainable=trainable)(x_divergent_two)
+        x_merge = Concatenate(name='merge_three_layers')([input_zero, x_divergent_one, x_divergent_two])
+        print("asdf   fasd  Merge shape:    {}".format(x_merge.shape))
 
+        """
         x_merge = Add(name='merge_two_divergence',
-                      trainable=trainable)([x_divergent_one, x_divergent_two])
+                      trainable=trainable)([input_zero, x_divergent_one, x_divergent_two])
+        """
+
         x_detection = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2), padding='same',
                                       kernel_regularizer=keras.regularizers.l2(self.l2r),
                                       name='Deconv_detection_final_layer',
@@ -232,9 +239,9 @@ class SFCNnetwork:
 
     def detection_branch(self, trainable=True, softmax_trainable=False):
         input_img = Input(shape=self.input_shape)
-        x_future_det_one, x_future_cls_det_two = self.share_layer(input_img, trainable=trainable)
+        x_future_cls_det_zero, x_future_det_one, x_future_cls_det_two = self.share_layer(input_img, trainable=trainable)
         # The detection output
-        x_detection = self.detection_branch_wrapper(x_future_det_one, x_future_cls_det_two, softmax_trainable=softmax_trainable)
+        x_detection = self.detection_branch_wrapper(x_future_cls_det_zero, x_future_det_one, x_future_cls_det_two, softmax_trainable=softmax_trainable)
         # The classification output
         det_model = Model(inputs=input_img,
                       outputs=x_detection)
@@ -270,7 +277,7 @@ class SFCNnetwork:
         """
         input_img = Input(shape=self.input_shape)
         # this shared layer is frozen before joint training
-        x_useless, x_cls = self.share_layer(input_img, trainable=trainable)
+        x_useless_0, x_useless_1, x_cls = self.share_layer(input_img, trainable=trainable)
         cls_output = self.classification_branch_wrapper(x_cls, softmax_trainable=softmax_trainable)
         cls_model = Model(inputs=input_img,
                           outputs=cls_output)
@@ -285,8 +292,8 @@ class SFCNnetwork:
         :param trainable: unfreeze detection branch layer if set to true
         """
         input_img = Input(shape=self.input_shape)
-        x_future_det_one, x_future_cls_det_two = self.share_layer(input_img, trainable=trainable)
-        x_detection = self.detection_branch_wrapper(x_future_det_one, x_future_cls_det_two, trainable=trainable,
+        x_future_det_zero, x_future_det_one, x_future_cls_det_two = self.share_layer(input_img, trainable=trainable)
+        x_detection = self.detection_branch_wrapper(x_future_det_zero, x_future_det_one, x_future_cls_det_two, trainable=trainable,
                                                     softmax_trainable=softmax_trainable)
         x_classification = self.classification_branch_wrapper(x_future_cls_det_two,
                                                               softmax_trainable=softmax_trainable)
@@ -433,10 +440,7 @@ def generator_with_aug(features, det_labels, cls_labels, batch_size, crop_size,
                 feature_index = features[index]
                 det_label_index = det_labels[index]
                 cls_label_index = cls_labels[index]
-                feature, det_label, cls_label = crop_on_fly(feature_index,
-                                                            det_label_index,
-                                                            cls_label_index,
-                                                            crop_size = crop_size)
+                feature, det_label, cls_label = crop_on_fly(feature_index, det_label_index, cls_label_index, crop_size = crop_size)
                 for k in range(aug_num):
                     aug_feature, aug_det_label, aug_cls_label = aug_on_fly(feature, det_label, cls_label)
                     batch_features[counter] = aug_feature
@@ -486,10 +490,16 @@ def callback_preparation(model):
     """
     timer = TimerCallback()
     timer.set_model(model)
-    tensorboard_callback = TensorBoard(os.path.join(TENSORBOARD_DIR, 'base_tensorboard_logs'))
-    checkpoint_callback = ModelCheckpoint(os.path.join(CHECKPOINT_DIR,'base_checkpoint',
+    tensorboard_callback = TensorBoard(os.path.join(TENSORBOARD_DIR, 'shallow_layer_concat_tensorboard'))
+    checkpoint_callback = ModelCheckpoint(os.path.join(CHECKPOINT_DIR,
+                                                       'shallow_layer_concat_checkpoint',
                                                        'train_point.h5'), save_best_only=True, period=1)
     return [tensorboard_callback, checkpoint_callback, timer]
+
+
+def multi_gpu(model):
+    parallel_model = keras.utils.multi_gpu_model(model, Config.gpu_count)
+    return parallel_model
 
 
 def det_model_compile(nn, det_loss_weight, softmax_trainable,
@@ -595,11 +605,11 @@ if __name__ == '__main__':
     network = SFCNnetwork(l2_regularizer=weights[-1])
     optimizer = SGD(lr=0.01, momentum=0.9, decay=1e-6, nesterov=True)
 
-    model_weights_saver = save_model_weights('base', str(EPOCHS))
+    model_weights_saver = save_model_weights('shallow_layer_concat', str(EPOCHS))
     if not os.path.exists(model_weights_saver[0]):
         det_model = det_model_compile(nn=network,
                                       det_loss_weight=weights[0], optimizer=optimizer, softmax_trainable=False)
-        print('base detection is training')
+        print('shallow layer detection is training')
         det_model.fit_generator(generator_with_aug(data[0], data[1], data[2],
                                                    crop_size=CROP_SIZE,
                                                    batch_size=BATCH_SIZE,
@@ -612,11 +622,10 @@ if __name__ == '__main__':
                                                                    crop_num=NUM_TO_CROP, aug_num=NUM_TO_AUG,
                                                                    type='detection'),
                                 validation_steps=5, callbacks=callback_preparation(det_model))
-
         det_model.save_weights(model_weights_saver[0])
 
     if not os.path.exists(model_weights_saver[1]):
-        print('base classification is training')
+        print('shallow layer classification is training')
         cls_model = cls_model_compile(nn=network, cls_loss_weight=weights[1],
                                       optimizer=optimizer,
                                       load_weights=model_weights_saver[0],
@@ -635,11 +644,11 @@ if __name__ == '__main__':
                                 validation_steps=5, callbacks=callback_preparation(cls_model))
         cls_model.save_weights(model_weights_saver[1])
     if not os.path.exists(model_weights_saver[2]):
-        print('base joint is training')
+        print('shallow layer joint is training')
         joint_model = joint_model_compile(nn=network, det_loss_weight=weights[0], cls_loss_in_joint=weights[2],
-                                          joint_loss_weight=weights[3],  optimizer=optimizer,
+                                          joint_loss_weight=weights[3], optimizer=optimizer,
                                           load_weights=model_weights_saver[1],
-                                           softmax_trainable=False)
+                                          softmax_trainable=False)
         joint_model.fit_generator(generator_with_aug(data[0], data[1], data[2],
                                                      crop_size=CROP_SIZE,
                                                      batch_size=BATCH_SIZE,
