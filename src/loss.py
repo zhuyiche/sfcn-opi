@@ -18,8 +18,8 @@ def detection_double_focal_loss_K(weight, fkg_focal_smoother, bkg_focal_smoother
         y_true = y_true[:, :, :, 1]
         fkg_smooth = K.pow((1-y_pred), fkg_focal_smoother)
         bkg_smooth = K.pow(y_pred, bkg_focal_smoother)
-        result = -K.mean(weight[1] + fkg_smooth * y_true * K.log(y_pred) +
-                                   bkg_smooth * (1-y_true) * K.log(1-y_pred))
+        result = -K.mean(weight[1] * fkg_smooth * y_true * K.log(y_pred) +
+                         weight[0] * bkg_smooth * (1-y_true) * K.log(1-y_pred))
         return result
     return _detection_loss
 

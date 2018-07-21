@@ -20,6 +20,7 @@ from loss import detection_focal_loss_K, \
     detection_focal_loss_without_part2_K, detection_double_focal_loss_K,\
     detection_double_focal_loss_indicator_K
 from config import Config
+from tensorflow.python.client import device_lib
 weight_decay = 0.005
 epsilon = 1e-7
 
@@ -790,13 +791,13 @@ def tune_loss_weight():
     bkg_extend_smooth_factor = [0.6, 0.7, 0.9, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9,
                                 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.1, 3.2, 3.3,
                                 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.1, 4.2, 4.3, 4.4, 4.5]
-    det_extend_weight = [np.array(0.21, 0.79), np.array(0.19, 0.81),
-                         np.array(0.18, 0.82), np.array(0.17, 0.83),
-                         np.array(0.22, 0.78), np.array(0.23, 0.77),
-                         np.array(0.24, 0.76)]
+    det_extend_weight = [np.array([0.21, 0.79]), np.array([0.19, 0.81]),
+                         np.array([0.18, 0.82]), np.array([0.17, 0.83]),
+                         np.array([0.22, 0.78]), np.array([0.23, 0.77]),
+                         np.array([0.24, 0.76])]
     ind_factor = [np.array([0.2, 0.8]),np.array([0.1, 0.9]), np.array([0.15, 0.85])]
     return [det_weight, fkg_smooth_factor, l2_weight, bkg_smooth_factor,
-            fkb_extend_smooth_factor, bkg_extend_smooth_factor, det_extend_weight]
+            fkb_extend_smooth_factor, bkg_extend_smooth_factor, det_extend_weight, ind_factor]
 
 
 def save_model_weights(hyper):
@@ -835,13 +836,17 @@ if __name__ == '__main__':
     BATCH_SIZE = Config.image_per_gpu * Config.gpu_count
 
     EPOCHS = 250
-    TRAIN_STEP_PER_EPOCH = 10
+
+
     if Config.backbone == 'resnet101':
         NUM_TO_AUG = 6
+        TRAIN_STEP_PER_EPOCH = 32
     elif Config.backbone == 'resnet152':
-        NUM_TO_AUG = 4
+        NUM_TO_AUG = 5
+        TRAIN_STEP_PER_EPOCH = 40
     elif Config.backbone == 'resnet50':
-        NUM_TO_AUG = 10
+        NUM_TO_AUG = 5
+        TRAIN_STEP_PER_EPOCH = 40
     #NUM_TO_CROP, NUM_TO_AUG = 20, 10
 
     data = data_prepare(print_input_shape=True, print_image_shape=True)
@@ -850,13 +855,17 @@ if __name__ == '__main__':
 
     for i, det_weight in enumerate(hyper_para[0]):
         if Config.model_loss == 'focal_double':
+            print('------------------------------------')
             print('This model is using {}'.format(Config.model_loss))
+            print()
             for j, fkg_weight in enumerate(hyper_para[1]):
                 for k, bkg_weight in enumerate(hyper_para[3]):
                     hyper = '{}_loss:{}_det:{}_fkg:{}_bkg:{}_lr:0.01'.format(Config.backbone, Config.model_loss,
                                                                              det_weight[0],
                                                                              fkg_weight,
                                                                              bkg_weight)  # _l2:{}_bkg:{}'.format()
+                    print(hyper)
+                    print()
                     model_weights_saver = save_model_weights(hyper)
 
                     detnet_model = detnet_model_compile(nn=network,
@@ -883,14 +892,17 @@ if __name__ == '__main__':
                     detnet_model.save_weights(model_weights_saver)
 
         if Config.model_loss == 'focal' or Config.model_loss == 'focal_no':
+            print('------------------------------------')
             print('This model is using {}'.format(Config.model_loss))
             for order, loss in enumerate(hyper_para[1]):
-                hyper = '{}_loss:{}_det:{}_lr:0.01'.format(Config.backbone, Config.model_loss, loss, det_weight[0]) #_l2:{}_bkg:{}'.format()
+                hyper = '{}_loss:{}_det:{}_lr:0.01'.format(Config.backbone, Config.model_loss, loss, det_weight[0])
+                print(hyper)
+                print()
                 model_weights_saver = save_model_weights(hyper)
 
                 detnet_model = detnet_model_compile(nn=network,
                                                     summary=Config.summary,
-                                                    det_loss_weight=bkg_weight,
+                                                    det_loss_weight=det_weight,
                                                     optimizer=optimizer,
                                                     fkg_smooth_factor=loss)
                 print('base detection is training')
@@ -910,13 +922,16 @@ if __name__ == '__main__':
 
                 detnet_model.save_weights(model_weights_saver)
         if Config.model_loss == 'base' or Config.model_loss == 'base_no':
+            print('------------------------------------')
             print('This model is using {}'.format(Config.model_loss))
-            hyper = '{}_loss:{}_lr:0.01_bkg:{}_'.format(Config.backbone, Config.model_loss, bkg_weight[0])
+            hyper = '{}_loss:{}_lr:0.01_bkg:{}_'.format(Config.backbone, Config.model_loss, det_weight[0])
+            print(hyper)
+            print()
             model_weights_saver = save_model_weights(hyper)
 
             detnet_model = detnet_model_compile(nn=network,
                                                 summary=Config.summary,
-                                                det_loss_weight=bkg_weight,
+                                                det_loss_weight=det_weight,
                                                 optimizer=optimizer)
             print('base detection is training')
             list_callback = callback_preparation(detnet_model, hyper)
@@ -940,6 +955,7 @@ if __name__ == '__main__':
     if Config.model_loss == 'focal_double' or Config.extend_program == True:
         for i, det_weight in enumerate(hyper_para[6]):
             if Config.model_loss == 'focal_double':
+                print("--------------------------------------")
                 print('This model is using {}'.format(Config.model_loss))
                 for j, fkg_weight in enumerate(hyper_para[4]):
                     for k, bkg_weight in enumerate(hyper_para[5]):
@@ -948,6 +964,8 @@ if __name__ == '__main__':
                                                                                  det_weight[0],
                                                                                  fkg_weight,
                                                                                  bkg_weight)
+                        print(hyper)
+                        print()
                         model_weights_saver = save_model_weights(hyper)
 
                         detnet_model = detnet_model_compile(nn=network,
