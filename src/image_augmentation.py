@@ -15,6 +15,25 @@ class ImageCropping:
         dm.initialize_train_test_folder(self.new_filename)
 
     @staticmethod
+    def crop_image_parts(image, det_mask, parts = 4, origin_shape=(512, 512)):
+        assert image.ndim == 4
+        ori_width, ori_height = origin_shape[0], origin_shape[1]
+        des_width, des_height = ori_width/parts, ori_height/parts
+        assert des_width == des_height
+
+        cropped_img1 = image[:, 0: des_width, 0: des_height]
+        cropped_img2 = image[:, des_width: ori_width, des_height: ori_height]
+        cropped_img3 = image[:, des_width: ori_width, 0: des_height]
+        cropped_img4 = image[:, 0: des_width, des_height, ori_height]
+
+        cropped_mask1 = det_mask[:, 0: des_width, 0: des_height]
+        cropped_mask2 = det_mask[:, des_width: ori_width, des_height: ori_height]
+        cropped_mask3 = det_mask[:, des_width: ori_width, 0: des_height]
+        cropped_mask4 = det_mask[:, 0: des_width, des_height, ori_height]
+
+
+
+    @staticmethod
     def crop_image_batch(image, masks=None, if_mask=True, if_det = True, if_cls = True,
                          origin_shape=(500, 500), desired_shape=(64, 64)):
         assert image.ndim == 4

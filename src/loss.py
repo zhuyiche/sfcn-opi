@@ -1,14 +1,116 @@
 import keras.backend as K
 import tensorflow as tf
 import numpy as np
-
 epsilon = 1e-7
 cls_threshold = 0.8
 
 
+def detection_double_focal_loss_K(weight, fkg_focal_smoother, bkg_focal_smoother):
+    """
+    Binary crossentropy loss with focal.
+    :param weight:
+    :param focal_smoother:
+    :return:
+    """
+    def _detection_loss(y_true, y_pred):
+        y_pred = tf.clip_by_value(y_pred, epsilon, 1 - epsilon)
+        y_pred = y_pred[:, :, :, 1]
+        y_true = y_true[:, :, :, 1]
+        fkg_smooth = K.pow((1-y_pred), fkg_focal_smoother)
+        bkg_smooth = K.pow(y_pred, bkg_focal_smoother)
+        result = -K.mean(weight[1] + fkg_smooth * y_true * K.log(y_pred) +
+                                   bkg_smooth * (1-y_true) * K.log(1-y_pred))
+        return result
+    return _detection_loss
+
+
+def detection_double_focal_loss_indicator_K(weight, fkg_focal_smoother,
+                                            bkg_focal_smoother,
+                                            indicator_weight):
+    """
+    Binary crossentropy loss with focal.
+    :param weight:
+    :param focal_smoother:
+    :return:
+    """
+    def _detection_loss(y_true, y_pred):
+        y_pred = tf.clip_by_value(y_pred, epsilon, 1 - epsilon)
+        y_pred = y_pred[:, :, :, 1]
+        y_true = y_true[:, :, :, 1]
+        fkg_smooth = K.pow((1-y_pred), fkg_focal_smoother)
+        bkg_smooth = K.pow(y_pred, bkg_focal_smoother)
+        indicator = K.greater_equal(y_pred, cls_threshold)
+        result = -K.mean((fkg_smooth + indicator_weight * indicator) * weight[1] * y_true * K.log(y_pred) +
+                                   bkg_smooth * (1-y_true) * K.log(1-y_pred) * weight[0])
+        return result
+    return _detection_loss
+
+
+def detection_loss_without_part2_K(weight):
+    """
+    Crossentropy loss without focal.
+    :param weight:
+    :return:
+    """
+    def _detection_loss(y_true, y_pred):
+        y_pred = tf.clip_by_value(y_pred, epsilon, 1 - epsilon)
+        result = -K.mean(weight * (y_true * K.log(y_pred)))
+        return result
+    return _detection_loss
+
+
+def detection_loss_K(weight):
+    """
+    Binary crossentropy loss without focal
+    :param weight:
+    :return:
+    """
+    def _detection_loss(y_true, y_pred):
+        y_pred = tf.clip_by_value(y_pred, epsilon, 1 - epsilon)
+        result = -K.mean(weight * y_true * K.log(y_pred) + (1-y_true) * K.log(1-y_pred))
+        return result
+    return _detection_loss
+
+
+def detection_focal_loss_K(weight, focal_smoother):
+    """
+    Binary crossentropy loss with focal.
+    :param weight:
+    :param focal_smoother:
+    :return:
+    """
+    def _detection_loss(y_true, y_pred):
+        y_pred = tf.clip_by_value(y_pred, epsilon, 1 - epsilon)
+        smooth = K.pow((1-y_pred), focal_smoother)
+        result = -K.mean(weight * (smooth * y_true * K.log(y_pred) + (1-y_true) * K.log(1-y_pred)))
+        return result
+    return _detection_loss
+
+
+def detection_focal_loss_without_part2_K(weight, focal_smoother):
+    """
+
+    :param weight:
+    :param focal_smoother:
+    :return:
+    """
+    def _detection_loss(y_true, y_pred):
+        y_pred = tf.clip_by_value(y_pred, epsilon, 1 - epsilon)
+        smooth = K.pow((1-y_pred), focal_smoother)
+        result = -K.mean(weight * (smooth * y_true * K.log(y_pred)))
+        return result
+    return _detection_loss
+
+
 def detection_loss(weight):
     def _detection_loss(y_true, y_pred):
-        return tf.reduce_mean(tf.nn.weighted_cross_entropy_with_logits(y_true, y_pred, weight))
+        y_pred = tf.clip_by_value(y_pred, epsilon, 1-epsilon)
+        weights = tf.convert_to_tensor(weight)
+        weights = tf.cast(weights, tf.float32)
+        y_true = tf.cast(y_true, tf.float32)
+        y_pred = tf.cast(y_pred, tf.float32)
+        result = -tf.reduce_mean(weights * y_true * tf.log(y_pred) + (1-y_true) * tf.log(1-y_pred))
+        return result
     return _detection_loss
 
 
@@ -67,6 +169,20 @@ def joint_loss(det_weights, cls_joint_weights, joint_weights, cls_threshold = cl
         return total_loss
     return _joint_loss
 
+
+def detection_focal_loss(weight, focal_smoother):
+    def _detection_loss(y_true, y_pred):
+        y_pred = tf.clip_by_value(y_pred, epsilon, 1-epsilon)
+        weights = tf.convert_to_tensor(weight)
+        weights = tf.cast(weights, tf.float32)
+        focal_smooth = tf.cast(focal_smoother, tf.float32)
+        y_true = tf.cast(y_true, tf.float32)
+        y_pred = tf.cast(y_pred, tf.float32)
+
+        smooth = tf.pow((1-y_pred), focal_smooth)
+        result = -tf.reduce_mean(weights * (smooth * y_true * tf.log(y_pred) + (1-y_true) * tf.log(1-y_pred)))
+        return result
+    return _detection_loss
 
 """
 def detection_loss_weight(weight):

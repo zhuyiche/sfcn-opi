@@ -230,7 +230,7 @@ def img_test(i, type):
     contrast2.enhance(20).show(imgc)
 
 
-def load_data(data_path, type):
+def load_data(data_path, type, reshape_size=None):
     path = os.path.join(data_path, type)  # cls_and_det/train
     imgs, det_masks, cls_masks = [], [], []
     for i, file in enumerate(os.listdir(path)):
@@ -239,16 +239,22 @@ def load_data(data_path, type):
                 img_path = os.path.join(path, file, img_file)
                 img = cv2.imread(img_path)
                 img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                if reshape_size is not None:
+                    img = cv2.resize(img, reshape_size)
                 img = _image_normalization(img)
                 imgs.append(img)
             elif 'detection.bmp' in img_file:
                 det_mask_path = os.path.join(path, file, img_file)
                 #det_mask = skimage.io.imread(det_mask_path, True).astype(np.bool)
                 det_mask = cv2.imread(det_mask_path, 0)
+                if reshape_size is not None:
+                    det_mask = cv2.resize(det_mask, reshape_size)
                 det_masks.append(det_mask)
             elif 'classification.bmp' in img_file:
                 cls_mask_path = os.path.join(path, file, img_file)
                 cls_mask = cv2.imread(cls_mask_path, 0)
+                if reshape_size != None:
+                    cls_mask = cv2.resize(cls_mask, reshape_size)
                 cls_masks.append(cls_mask)
     return np.array(imgs), np.array(det_masks), np.array(cls_masks)
 
