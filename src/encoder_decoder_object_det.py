@@ -867,107 +867,7 @@ if __name__ == '__main__':
                     print(hyper)
                     print()
                     model_weights_saver = save_model_weights(hyper)
-
-                    detnet_model = detnet_model_compile(nn=network,
-                                                        summary=Config.summary,
-                                                        det_loss_weight=det_weight,
-                                                        optimizer=optimizer,
-                                                        fkg_smooth_factor=fkg_weight,
-                                                        bkg_smooth_factor=bkg_weight)
-                    print('base detection is training')
-                    list_callback = callback_preparation(detnet_model, hyper)
-                    list_callback.append(LearningRateScheduler(lr_scheduler))
-                    detnet_model.fit_generator(ori_shape_generator_with_heavy_aug(data[0],
-                                                                                  data[1],
-                                                                                  batch_size=BATCH_SIZE,
-                                                                                  aug_num=NUM_TO_AUG),
-                                               epochs=EPOCHS,
-                                               steps_per_epoch=TRAIN_STEP_PER_EPOCH,
-                                               validation_data=ori_shape_generator_with_heavy_aug(
-                                                   data[2], data[3], batch_size=BATCH_SIZE,
-                                                   aug_num=NUM_TO_AUG),
-                                               validation_steps=2,
-                                               callbacks=list_callback)
-
-                    detnet_model.save_weights(model_weights_saver)
-
-        if Config.model_loss == 'focal' or Config.model_loss == 'focal_no':
-            print('------------------------------------')
-            print('This model is using {}'.format(Config.model_loss))
-            for order, loss in enumerate(hyper_para[1]):
-                hyper = '{}_loss:{}_det:{}_lr:0.01'.format(Config.backbone, Config.model_loss, loss, det_weight[0])
-                print(hyper)
-                print()
-                model_weights_saver = save_model_weights(hyper)
-
-                detnet_model = detnet_model_compile(nn=network,
-                                                    summary=Config.summary,
-                                                    det_loss_weight=det_weight,
-                                                    optimizer=optimizer,
-                                                    fkg_smooth_factor=loss)
-                print('base detection is training')
-                list_callback = callback_preparation(detnet_model, hyper)
-                list_callback.append(LearningRateScheduler(lr_scheduler))
-                detnet_model.fit_generator(ori_shape_generator_with_heavy_aug(data[0],
-                                                                              data[1],
-                                                                              batch_size=BATCH_SIZE,
-                                                                              aug_num=NUM_TO_AUG),
-                                        epochs=EPOCHS,
-                                        steps_per_epoch=TRAIN_STEP_PER_EPOCH,
-                                        validation_data=ori_shape_generator_with_heavy_aug(
-                                                            data[2], data[3], batch_size=BATCH_SIZE,
-                                                            aug_num=NUM_TO_AUG),
-                                        validation_steps=2,
-                                        callbacks=list_callback)
-
-                detnet_model.save_weights(model_weights_saver)
-        if Config.model_loss == 'base' or Config.model_loss == 'base_no':
-            print('------------------------------------')
-            print('This model is using {}'.format(Config.model_loss))
-            hyper = '{}_loss:{}_lr:0.01_bkg:{}_'.format(Config.backbone, Config.model_loss, det_weight[0])
-            print(hyper)
-            print()
-            model_weights_saver = save_model_weights(hyper)
-
-            detnet_model = detnet_model_compile(nn=network,
-                                                summary=Config.summary,
-                                                det_loss_weight=det_weight,
-                                                optimizer=optimizer)
-            print('base detection is training')
-            list_callback = callback_preparation(detnet_model, hyper)
-            list_callback.append(LearningRateScheduler(lr_scheduler))
-            detnet_model.fit_generator(ori_shape_generator_with_heavy_aug(data[0],
-                                                                          data[1],
-                                                                          batch_size=BATCH_SIZE,
-                                                                          aug_num=NUM_TO_AUG),
-                                       epochs=EPOCHS,
-                                       steps_per_epoch=TRAIN_STEP_PER_EPOCH,
-                                       validation_data=ori_shape_generator_with_heavy_aug(
-                                           data[2], data[3], batch_size=BATCH_SIZE,
-                                           aug_num=NUM_TO_AUG),
-                                       validation_steps=2,
-                                       callbacks=list_callback)
-
-            detnet_model.save_weights(model_weights_saver)
-
-
-    # Extension program.
-    if Config.model_loss == 'focal_double' or Config.extend_program == True:
-        for i, det_weight in enumerate(hyper_para[6]):
-            if Config.model_loss == 'focal_double':
-                print("--------------------------------------")
-                print('This model is using {}'.format(Config.model_loss))
-                for j, fkg_weight in enumerate(hyper_para[4]):
-                    for k, bkg_weight in enumerate(hyper_para[5]):
-                        hyper = '{}_loss:{}_det:{}_fkg:{}_bkg:{}_lr:0.01'.format(Config.backbone,
-                                                                                 Config.model_loss,
-                                                                                 det_weight[0],
-                                                                                 fkg_weight,
-                                                                                 bkg_weight)
-                        print(hyper)
-                        print()
-                        model_weights_saver = save_model_weights(hyper)
-
+                    if not os.path.exists(model_weights_saver):
                         detnet_model = detnet_model_compile(nn=network,
                                                             summary=Config.summary,
                                                             det_loss_weight=det_weight,
@@ -990,6 +890,106 @@ if __name__ == '__main__':
                                                    callbacks=list_callback)
 
                         detnet_model.save_weights(model_weights_saver)
+
+        if Config.model_loss == 'focal' or Config.model_loss == 'focal_no':
+            print('------------------------------------')
+            print('This model is using {}'.format(Config.model_loss))
+            for order, loss in enumerate(hyper_para[1]):
+                hyper = '{}_loss:{}_det:{}_lr:0.01'.format(Config.backbone, Config.model_loss, loss, det_weight[0])
+                print(hyper)
+                print()
+                model_weights_saver = save_model_weights(hyper)
+                if not os.path.exists(model_weights_saver):
+                    detnet_model = detnet_model_compile(nn=network,
+                                                        summary=Config.summary,
+                                                        det_loss_weight=det_weight,
+                                                        optimizer=optimizer,
+                                                        fkg_smooth_factor=loss)
+                    print('base detection is training')
+                    list_callback = callback_preparation(detnet_model, hyper)
+                    list_callback.append(LearningRateScheduler(lr_scheduler))
+                    detnet_model.fit_generator(ori_shape_generator_with_heavy_aug(data[0],
+                                                                                  data[1],
+                                                                                  batch_size=BATCH_SIZE,
+                                                                                  aug_num=NUM_TO_AUG),
+                                            epochs=EPOCHS,
+                                            steps_per_epoch=TRAIN_STEP_PER_EPOCH,
+                                            validation_data=ori_shape_generator_with_heavy_aug(
+                                                                data[2], data[3], batch_size=BATCH_SIZE,
+                                                                aug_num=NUM_TO_AUG),
+                                            validation_steps=2,
+                                            callbacks=list_callback)
+
+                    detnet_model.save_weights(model_weights_saver)
+        if Config.model_loss == 'base' or Config.model_loss == 'base_no':
+            print('------------------------------------')
+            print('This model is using {}'.format(Config.model_loss))
+            hyper = '{}_loss:{}_lr:0.01_bkg:{}_'.format(Config.backbone, Config.model_loss, det_weight[0])
+            print(hyper)
+            print()
+            model_weights_saver = save_model_weights(hyper)
+            if not os.path.exists(model_weights_saver):
+                detnet_model = detnet_model_compile(nn=network,
+                                                    summary=Config.summary,
+                                                    det_loss_weight=det_weight,
+                                                    optimizer=optimizer)
+                print('base detection is training')
+                list_callback = callback_preparation(detnet_model, hyper)
+                list_callback.append(LearningRateScheduler(lr_scheduler))
+                detnet_model.fit_generator(ori_shape_generator_with_heavy_aug(data[0],
+                                                                              data[1],
+                                                                              batch_size=BATCH_SIZE,
+                                                                              aug_num=NUM_TO_AUG),
+                                           epochs=EPOCHS,
+                                           steps_per_epoch=TRAIN_STEP_PER_EPOCH,
+                                           validation_data=ori_shape_generator_with_heavy_aug(
+                                               data[2], data[3], batch_size=BATCH_SIZE,
+                                               aug_num=NUM_TO_AUG),
+                                           validation_steps=2,
+                                           callbacks=list_callback)
+
+                detnet_model.save_weights(model_weights_saver)
+
+
+    # Extension program.
+    if Config.model_loss == 'focal_double' or Config.extend_program == True:
+        for i, det_weight in enumerate(hyper_para[6]):
+            if Config.model_loss == 'focal_double':
+                print("--------------------------------------")
+                print('This model is using {}'.format(Config.model_loss))
+                for j, fkg_weight in enumerate(hyper_para[4]):
+                    for k, bkg_weight in enumerate(hyper_para[5]):
+                        hyper = '{}_loss:{}_det:{}_fkg:{}_bkg:{}_lr:0.01'.format(Config.backbone,
+                                                                                 Config.model_loss,
+                                                                                 det_weight[0],
+                                                                                 fkg_weight,
+                                                                                 bkg_weight)
+                        print(hyper)
+                        print()
+                        model_weights_saver = save_model_weights(hyper)
+                        if not os.path.exists(model_weights_saver):
+                            detnet_model = detnet_model_compile(nn=network,
+                                                                summary=Config.summary,
+                                                                det_loss_weight=det_weight,
+                                                                optimizer=optimizer,
+                                                                fkg_smooth_factor=fkg_weight,
+                                                                bkg_smooth_factor=bkg_weight)
+                            print('base detection is training')
+                            list_callback = callback_preparation(detnet_model, hyper)
+                            list_callback.append(LearningRateScheduler(lr_scheduler))
+                            detnet_model.fit_generator(ori_shape_generator_with_heavy_aug(data[0],
+                                                                                          data[1],
+                                                                                          batch_size=BATCH_SIZE,
+                                                                                          aug_num=NUM_TO_AUG),
+                                                       epochs=EPOCHS,
+                                                       steps_per_epoch=TRAIN_STEP_PER_EPOCH,
+                                                       validation_data=ori_shape_generator_with_heavy_aug(
+                                                           data[2], data[3], batch_size=BATCH_SIZE,
+                                                           aug_num=NUM_TO_AUG),
+                                                       validation_steps=2,
+                                                       callbacks=list_callback)
+
+                            detnet_model.save_weights(model_weights_saver)
 
 
 
