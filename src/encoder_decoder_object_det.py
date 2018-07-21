@@ -493,8 +493,8 @@ class Detnet:
         stage_3456_upsample = Activation('relu', name='stage_3456_RELU_1')(stage_3456_upsample)
 
         stage_3456_upsample = Conv3l2(filters=64, kernel_regularizer_weight=self.l2r,
-                                      name='stage_3456_Conv_1')(stage_3456_upsample)
-        stage_3456_upsample = BatchNormalization(name='stage_3456_BN_1')(stage_3456_upsample)
+                                      name='stage_3456_Conv_2')(stage_3456_upsample)
+        stage_3456_upsample = BatchNormalization(name='stage_3456_BN_2')(stage_3456_upsample)
 
 
         stage_23456 = Add(name='stage2_add_3456')([stage_3456_upsample, x_stage2_1x1])
@@ -829,7 +829,6 @@ def detnet_model_compile(nn, det_loss_weight,
     elif Config.model_loss == 'default':
         loss_input = ['categorical_crossentropy']
 
-
     print('detection model is set')
     if Config.backbone == 'resnet50':
         detnet_model=nn.detnet_resnet50_backbone()
@@ -837,6 +836,9 @@ def detnet_model_compile(nn, det_loss_weight,
         detnet_model=nn.detnet_resnet101_backbone()
     elif Config.backbone == 'resnet152':
         detnet_model=nn.detnet_resnet152_backbone()
+    elif Config.backbone == 'resnet50_encoder_shallow':
+        detnet_model=nn.detnet_resnet50_encoder_shallow_backbone()
+
     print('The backbone structure is using {}'.format(Config.backbone))
     detnet_model.compile(optimizer=optimizer,
                       loss=loss_input,
@@ -932,6 +934,9 @@ if __name__ == '__main__':
     elif Config.backbone == 'resnet50':
         NUM_TO_AUG = 5
         TRAIN_STEP_PER_EPOCH = 40
+    elif Config.backbone == 'resnet50_encoder_shallow':
+        NUM_TO_AUG = 3
+        TRAIN_STEP_PER_EPOCH = 65
     #NUM_TO_CROP, NUM_TO_AUG = 20, 10
 
     data = data_prepare(print_input_shape=True, print_image_shape=True)
