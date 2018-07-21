@@ -346,6 +346,166 @@ class Detnet:
     ####################################
     # Full structure of encoder-decoder
     ####################################
+    def detnet_resnet50_backbone(self):
+        img_input = Input(self.input_shape)
+        #########
+        # Adapted first stage
+        #########
+        x_stage1 = self.first_layer(inputs=img_input)
+        x_stage2, x_stage3, x_stage4 = self.resnet_50(x_stage1, [32, 64, 128], stages=[2, 3, 4])
+
+        #########
+        # following layer proposed by DetNet
+        #########
+        x_stage5_B = self.dilated_with_projection(x_stage4, stage=5)
+        x_stage5_A1 = self.dilated_bottleneck(x_stage5_B, stage=5, block=1)
+        x_stage5 = self.dilated_bottleneck(x_stage5_A1, stage=5, block=2)
+        x_stage6_B = self.dilated_with_projection(x_stage5, stage=6)
+        x_stage6_A1 = self.dilated_bottleneck(x_stage6_B, stage=6, block=1)
+        x_stage6 = self.dilated_bottleneck(x_stage6_A1, stage=6, block=2)
+        x_stage2_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
+                              name='stage2_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage2)
+        x_stage2_1x1 = BatchNormalization(name='x_stage2_1x1_BN')(x_stage2_1x1)
+        x_stage3_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
+                              name = 'stage3_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage3)
+        x_stage3_1x1 = BatchNormalization(name='x_stage3_1x1_BN')(x_stage3_1x1)
+        x_stage4_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
+                              name = 'stage4_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage4)
+        x_stage4_1x1 = BatchNormalization(name='x_stage4_1x1_BN')(x_stage4_1x1)
+        x_stage5_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
+                              name='stage5_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage5)
+        x_stage5_1x1 = BatchNormalization(name='x_stage5_1x1_BN')(x_stage5_1x1)
+        x_stage6_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
+                              name='stage6_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage6)
+        x_stage6_1x1 = BatchNormalization(name='x_stage6_1x1_BN')(x_stage6_1x1)
+
+        stage_56 = Add(name='stage5_add_6')([x_stage6_1x1, x_stage5_1x1])
+        stage_456 = Add(name='stage4_add_56')([stage_56, x_stage4_1x1])
+        stage_456_upsample = Conv2DTranspose(filters=2, kernel_size=(1, 1), strides=(2, 2),
+                                             kernel_regularizer=keras.regularizers.l2(self.l2r),
+                                             name='stage456_upsample')(stage_456)
+        stage_456_upsample = BatchNormalization(name='stage_456_upsample_BN')(stage_456_upsample)
+
+        stage_3456 = Add(name='stage3_add_456')([stage_456_upsample, x_stage3_1x1])
+
+        stage_3456_upsample = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2),
+                                              padding='same',
+                                              kernel_regularizer=keras.regularizers.l2(self.l2r),
+                                              name='stage3456_upsample')(stage_3456)
+        stage_3456_upsample = BatchNormalization(name='stage_3456_upsample_BN')(stage_3456_upsample)
+
+        stage_23456 = Add(name='stage2_add_3456')([stage_3456_upsample, x_stage2_1x1])
+        x_output_b4_softmax = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2),
+                                              padding='same', kernel_regularizer=l2(self.l2r),
+                                              name='Deconv_b4_softmax_output')(stage_23456)
+        x_output = Activation('softmax', name='Final_Softmax')(x_output_b4_softmax)
+        detnet_model = Model(inputs=img_input,
+                             outputs=x_output)
+        return detnet_model
+
+    def detnet_resnet50_encoder_shallow_backbone(self):
+        img_input = Input(self.input_shape)
+        #########
+        # Adapted first stage
+        #########
+        x_stage1 = self.first_layer(inputs=img_input)
+        x_stage2, x_stage3, x_stage4 = self.resnet_50(x_stage1, [64, 128, 256], stages=[2, 3, 4])
+
+        #########
+        # following layer proposed by DetNet
+        #########
+        x_stage5_B = self.dilated_with_projection(x_stage4, stage=5)
+        x_stage5_A1 = self.dilated_bottleneck(x_stage5_B, stage=5, block=1)
+        x_stage5 = self.dilated_bottleneck(x_stage5_A1, stage=5, block=2)
+        x_stage6_B = self.dilated_with_projection(x_stage5, stage=6)
+        x_stage6_A1 = self.dilated_bottleneck(x_stage6_B, stage=6, block=1)
+        x_stage6 = self.dilated_bottleneck(x_stage6_A1, stage=6, block=2)
+        x_stage2_1x1 = Conv2D(filters=64, kernel_size=(1, 1), padding='same',
+                              name='stage2_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage2)
+        x_stage2_1x1 = BatchNormalization(name='x_stage2_1x1_BN')(x_stage2_1x1)
+        x_stage3_1x1 = Conv2D(filters=128, kernel_size=(1,1), padding='same',
+                              name = 'stage3_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage3)
+        x_stage3_1x1 = BatchNormalization(name='x_stage3_1x1_BN')(x_stage3_1x1)
+        x_stage4_1x1 = Conv2D(filters=256, kernel_size=(1,1), padding='same',
+                              name = 'stage4_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage4)
+        x_stage4_1x1 = BatchNormalization(name='x_stage4_1x1_BN')(x_stage4_1x1)
+        x_stage5_1x1 = Conv2D(filters=256, kernel_size=(1, 1), padding='same',
+                              name='stage5_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage5)
+        x_stage5_1x1 = BatchNormalization(name='x_stage5_1x1_BN')(x_stage5_1x1)
+        x_stage6_1x1 = Conv2D(filters=256, kernel_size=(1, 1), padding='same',
+                              name='stage6_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage6)
+        x_stage6_1x1 = BatchNormalization(name='x_stage6_1x1_BN')(x_stage6_1x1)
+
+        stage_56 = Add(name='stage5_add_6')([x_stage6_1x1, x_stage5_1x1])
+        stage_456 = Add(name='stage4_add_56')([stage_56, x_stage4_1x1])
+        #########
+        # Stage 456 part
+        #########
+        stage_456_upsample = Conv2DTranspose(filters=128, kernel_size=(1, 1), strides=(2, 2),
+                                             kernel_regularizer=keras.regularizers.l2(self.l2r),
+                                             name='stage456_upsample')(stage_456)
+        stage_456_upsample = BatchNormalization(name='stage_456_upsample_BN')(stage_456_upsample)
+        # stage456 corresponding to stage 4 at resnet50 which contains 6 convolution layer
+        stage_456_upsample = Activation('relu', name='stage_456_upsample_RELU')(stage_456_upsample
+                                                                                )
+        stage_456_upsample = Conv3l2(filters=128, kernel_regularizer_weight=self.l2r,
+                                     name='stage_456_Conv_1')(stage_456_upsample)
+        stage_456_upsample = BatchNormalization(name='stage_456_BN_1')(stage_456_upsample)
+        # stage456 corresponding to stage 4 at resnet50 which contains 6 convolution layer
+        stage_456_upsample = Activation('relu', name='stage_456_RELU_1')(stage_456_upsample)
+
+        stage_456_upsample = Conv3l2(filters=128, kernel_regularizer_weight=self.l2r,
+                                     name='stage_456_Conv_2')(stage_456_upsample)
+        stage_456_upsample = BatchNormalization(name='stage_456_BN_2')(stage_456_upsample)
+        # stage456 corresponding to stage 4 at resnet50 which contains 6 convolution layer
+        stage_456_upsample = Activation('relu', name='stage_456_RELU_2')(stage_456_upsample)
+
+        stage_456_upsample = Conv3l2(filters=128, kernel_regularizer_weight=self.l2r,
+                                     name='stage_456_Conv_3')(stage_456_upsample)
+        stage_456_upsample = BatchNormalization(name='stage_456_BN_3')(stage_456_upsample)
+        # stage456 corresponding to stage 4 at resnet50 which contains 6 convolution layer
+
+        #########
+        # Stage 3456 part
+        #########
+        stage_3456 = Add(name='stage3_add_456')([stage_456_upsample, x_stage3_1x1])
+
+        stage_3456_upsample = Conv2DTranspose(filters=64, kernel_size=(3, 3), strides=(2, 2),
+                                              padding='same',
+                                              kernel_regularizer=keras.regularizers.l2(self.l2r),
+                                              name='stage3456_upsample')(stage_3456)
+        stage_3456_upsample = BatchNormalization(name='stage_3456_upsample_BN')(stage_3456_upsample)
+        stage_3456_upsample = Activation('relu', name='stage_3456_upsample_RELU')(stage_3456_upsample)
+
+        stage_3456_upsample = Conv3l2(filters=64, kernel_regularizer_weight=self.l2r,
+                                     name='stage_3456_Conv_1')(stage_3456_upsample)
+        stage_3456_upsample = BatchNormalization(name='stage_3456_BN_1')(stage_3456_upsample)
+        stage_3456_upsample = Activation('relu', name='stage_3456_RELU_1')(stage_3456_upsample)
+
+        stage_3456_upsample = Conv3l2(filters=64, kernel_regularizer_weight=self.l2r,
+                                      name='stage_3456_Conv_1')(stage_3456_upsample)
+        stage_3456_upsample = BatchNormalization(name='stage_3456_BN_1')(stage_3456_upsample)
+
+
+        stage_23456 = Add(name='stage2_add_3456')([stage_3456_upsample, x_stage2_1x1])
+        x_output_b4_softmax = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2),
+                                              padding='same', kernel_regularizer=l2(self.l2r),
+                                              name='Deconv_b4_softmax_output')(stage_23456)
+        x_output = Activation('softmax', name='Final_Softmax')(x_output_b4_softmax)
+        detnet_model = Model(inputs=img_input,
+                             outputs=x_output)
+        return detnet_model
+
     def detnet_resnet101_backbone(self):
         img_input = Input(self.input_shape)
         #########
@@ -411,59 +571,6 @@ class Detnet:
                              outputs=x_output)
         return detnet_model
 
-    def detnet_resnet50_backbone(self):
-        img_input = Input(self.input_shape)
-        #########
-        # Adapted first stage
-        #########
-        x_stage1 = self.first_layer(inputs=img_input)
-        x_stage2, x_stage3, x_stage4 = self.resnet_50(x_stage1, [32, 64, 128], stages=[2, 3, 4])
-
-        #########
-        # following layer proposed by DetNet
-        #########
-        x_stage5_B = self.dilated_with_projection(x_stage4, stage=5)
-        x_stage5_A1 = self.dilated_bottleneck(x_stage5_B, stage=5, block=1)
-        x_stage5 = self.dilated_bottleneck(x_stage5_A1, stage=5, block=2)
-        x_stage6_B = self.dilated_with_projection(x_stage5, stage=6)
-        x_stage6_A1 = self.dilated_bottleneck(x_stage6_B, stage=6, block=1)
-        x_stage6 = self.dilated_bottleneck(x_stage6_A1, stage=6, block=2)
-        x_stage2_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
-                              name='stage2_1x1_conv',
-                              kernel_regularizer=l2(self.l2r))(x_stage2)
-        x_stage3_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
-                              name='stage3_1x1_conv',
-                              kernel_regularizer=l2(self.l2r))(x_stage3)
-        x_stage4_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
-                              name='stage4_1x1_conv',
-                              kernel_regularizer=l2(self.l2r))(x_stage4)
-        x_stage5_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
-                              name='stage5_1x1_conv',
-                              kernel_regularizer=l2(self.l2r))(x_stage5)
-        x_stage6_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
-                              name='stage6_1x1_conv',
-                              kernel_regularizer=l2(self.l2r))(x_stage6)
-
-        stage_56 = Add(name='stage5_add_6')([x_stage6_1x1, x_stage5_1x1])
-        stage_456 = Add(name='stage4_add_56')([stage_56, x_stage4_1x1])
-        stage_456_upsample = Conv2DTranspose(filters=2, kernel_size=(1, 1), strides=(2, 2),
-                                             kernel_regularizer=keras.regularizers.l2(self.l2r),
-                                             name='stage456_upsample')(stage_456)
-        stage_3456 = Add(name='stage3_add_456')([stage_456_upsample, x_stage3_1x1])
-
-        stage_3456_upsample = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2),
-                                              padding='same',
-                                              kernel_regularizer=keras.regularizers.l2(self.l2r),
-                                              name='stage3456_upsample')(stage_3456)
-        stage_23456 = Add(name='stage2_add_3456')([stage_3456_upsample, x_stage2_1x1])
-        x_output_b4_softmax = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2),
-                                              padding='same', kernel_regularizer=l2(self.l2r),
-                                              name='Deconv_b4_softmax_output')(stage_23456)
-        x_output = Activation('softmax', name='Final_Softmax')(x_output_b4_softmax)
-        detnet_model = Model(inputs=img_input,
-                             outputs=x_output)
-        return detnet_model
-
     def detnet_resnet152_backbone(self):
         img_input = Input(self.input_shape)
         #########
@@ -484,24 +591,30 @@ class Detnet:
         x_stage2_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
                               name='stage2_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage2)
-        x_stage3_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
-                              name='stage3_1x1_conv',
+        x_stage2_1x1 = BatchNormalization(name='x_stage2_1x1_BN')(x_stage2_1x1)
+        x_stage3_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
+                              name = 'stage3_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage3)
-        x_stage4_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
-                              name='stage4_1x1_conv',
+        x_stage3_1x1 = BatchNormalization(name='x_stage3_1x1_BN')(x_stage3_1x1)
+        x_stage4_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
+                              name = 'stage4_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage4)
+        x_stage4_1x1 = BatchNormalization(name='x_stage4_1x1_BN')(x_stage4_1x1)
         x_stage5_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
                               name='stage5_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage5)
+        x_stage5_1x1 = BatchNormalization(name='x_stage5_1x1_BN')(x_stage5_1x1)
         x_stage6_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
                               name='stage6_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage6)
+        x_stage6_1x1 = BatchNormalization(name='x_stage6_1x1_BN')(x_stage6_1x1)
 
         stage_56 = Add(name='stage5_add_6')([x_stage6_1x1, x_stage5_1x1])
         stage_456 = Add(name='stage4_add_56')([stage_56, x_stage4_1x1])
         stage_456_upsample = Conv2DTranspose(filters=2, kernel_size=(1, 1), strides=(2, 2),
                                              kernel_regularizer=keras.regularizers.l2(self.l2r),
                                              name='stage456_upsample')(stage_456)
+
         stage_3456 = Add(name='stage3_add_456')([stage_456_upsample, x_stage3_1x1])
 
         stage_3456_upsample = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2),
@@ -516,34 +629,6 @@ class Detnet:
         detnet_model = Model(inputs=img_input,
                              outputs=x_output)
         return detnet_model
-    """
-    def detnet_decoder(self, features):
-        stage_56 = Add(name='stage5_add_6')([features[3], features[4]])
-        stage_456 = Add(name='stage4_add_56')([stage_56, features[2]])
-        stage_456_upsample = Conv2DTranspose(filters=2, kernel_size=(1,1), strides=(2,2),
-                                             kernel_regularizer=keras.regularizers.l2(self.l2r),
-                                             name='stage456_upsample')(stage_456)
-        stage_3456 = Add(name='stage3_add_456')([features[1], stage_456_upsample])
-
-        stage_3456_upsample = Conv2DTranspose(filters=2, kernel_size=(3,3), strides=(2,2),
-                                              padding='same',
-                                              kernel_regularizer=keras.regularizers.l2(self.l2r),
-                                              name='stage3456_upsample')(stage_3456)
-        stage_23456 = Add(name='stage2_add_3456')([features[0], stage_3456_upsample])
-        return stage_23456
-   
-    def detnet_backbone(self, softmax_trainable=True):
-        img_input = Input(self.input_shape)
-        x_encoder = self.detnet_encoder(img_input)
-        x_decoder = self.detnet_decoder(x_encoder)
-        x_output_b4_softmax = Conv2DTranspose(filters=2, kernel_size=(3,3), strides=(2,2),
-                                             padding='same', kernel_regularizer=l2(self.l2r),
-                                             name='Deconv_b4_softmax_output')(x_decoder)
-        x_output = Activation('softmax', name='Final_Softmax')(x_output_b4_softmax)
-        detnet_model = Model(inputs=img_input,
-                             outputs=x_output)
-        return detnet_model
-    """
 
 
 class TimerCallback(Callback):

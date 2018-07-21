@@ -133,20 +133,18 @@ def eval_weights_testset(weightsdir):
 
 if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = str(Config.gpu)
-    eval_weights_testset(WEIGHT_DIR)
-    """
-    weight_path = 'base_resnet50_loss:base_lr:0.01_bkg:0.2__train.h5'
+    #eval_weights_testset(WEIGHT_DIR)
+
+    weight_path = 'focal_double_resnet50_loss:focal_double_det:0.2_fkg:0.5_bkg:0.5_lr:0.01_train.h5'
     imgdir = 'img' + str(29)
     model = Detnet().detnet_resnet50_backbone()
     model.load_weights(os.path.join(WEIGHT_DIR, weight_path))
     prob_threshhold = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
-    eval_single_img(model, imgdir)
-    """
-    """
+    #eval_single_img(model, imgdir)
+
     for prob in prob_threshhold:
         print('The nms threshold is ', prob)
-        eval_testset(model, prob_threshold=prob)
-"""
+        eval_testset(model, prob_threshold=prob, print_single_result=True)
 
 
 
