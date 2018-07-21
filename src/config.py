@@ -6,6 +6,7 @@ class Config(object):
     Manually setting configuration.
     """
     parser = argparse.ArgumentParser()
+    parser.add_argument("--extend", type=bool, default=True)
     parser.add_argument("--gpu_count", default=1)
     parser.add_argument("--gpu", default=0)
     parser.add_argument("--image_per_gpu", default=1)
@@ -29,3 +30,4 @@ class Config(object):
     model_loss = args.model_loss
     type = args.type
     test_img = args.test_img
+    extend_program = args.extend

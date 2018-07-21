@@ -73,10 +73,10 @@ class Detnet:
     """
     Backbone of SFCN-OPI.
     """
-    def __init__(self, l2_regularizer, input_shape=(512, 512, 3)):
+    def __init__(self, input_shape=(512, 512, 3)):
         # self.inputs = inputs
         self.input_shape = input_shape
-        self.l2r = l2_regularizer
+        self.l2r = 0.001
 
     def first_layer(self, inputs, trainable=True):
         """
@@ -365,34 +365,46 @@ class Detnet:
         x_stage2_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
                               name='stage2_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage2)
+        x_stage2_1x1 = BatchNormalization(name='x_stage2_1x1_BN')(x_stage2_1x1)
         x_stage3_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
                               name = 'stage3_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage3)
+        x_stage3_1x1 = BatchNormalization(name='x_stage3_1x1_BN')(x_stage3_1x1)
         x_stage4_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
                               name = 'stage4_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage4)
+        x_stage4_1x1 = BatchNormalization(name='x_stage4_1x1_BN')(x_stage4_1x1)
         x_stage5_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
                               name='stage5_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage5)
+        x_stage5_1x1 = BatchNormalization(name='x_stage5_1x1_BN')(x_stage5_1x1)
         x_stage6_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
                               name='stage6_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage6)
+        x_stage6_1x1 = BatchNormalization(name='x_stage6_1x1_BN')(x_stage6_1x1)
 
         stage_56 = Add(name='stage5_add_6')([x_stage6_1x1, x_stage5_1x1])
         stage_456 = Add(name='stage4_add_56')([stage_56, x_stage4_1x1])
         stage_456_upsample = Conv2DTranspose(filters=2, kernel_size=(1, 1), strides=(2, 2),
                                              kernel_regularizer=keras.regularizers.l2(self.l2r),
-                                             name='stage456_upsample')(stage_456)
+                                             name='stage456_upsample_Deconv')(stage_456)
+        stage_456_upsample = BatchNormalization(name='stage_456_upsample_BN')(stage_456_upsample)
+
+
         stage_3456 = Add(name='stage3_add_456')([stage_456_upsample, x_stage3_1x1])
 
         stage_3456_upsample = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2),
                                               padding='same',
                                               kernel_regularizer=keras.regularizers.l2(self.l2r),
                                               name='stage3456_upsample')(stage_3456)
+        stage_3456_upsample = BatchNormalization(name='stage_3456_upsample_BN')(stage_3456_upsample)
+
         stage_23456 = Add(name='stage2_add_3456')([stage_3456_upsample, x_stage2_1x1])
         x_output_b4_softmax = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2),
                                               padding='same', kernel_regularizer=l2(self.l2r),
                                               name='Deconv_b4_softmax_output')(stage_23456)
+        x_output_b4_softmax = BatchNormalization(name='x_output_b4_softmax_BN')(x_output_b4_softmax)
+
         x_output = Activation('softmax', name='Final_Softmax')(x_output_b4_softmax)
         detnet_model = Model(inputs=img_input,
                              outputs=x_output)
@@ -418,11 +430,11 @@ class Detnet:
         x_stage2_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
                               name='stage2_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage2)
-        x_stage3_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
-                              name = 'stage3_1x1_conv',
+        x_stage3_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
+                              name='stage3_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage3)
-        x_stage4_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
-                              name = 'stage4_1x1_conv',
+        x_stage4_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
+                              name='stage4_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage4)
         x_stage5_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
                               name='stage5_1x1_conv',
@@ -471,11 +483,11 @@ class Detnet:
         x_stage2_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
                               name='stage2_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage2)
-        x_stage3_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
-                              name = 'stage3_1x1_conv',
+        x_stage3_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
+                              name='stage3_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage3)
-        x_stage4_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
-                              name = 'stage4_1x1_conv',
+        x_stage4_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
+                              name='stage4_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage4)
         x_stage5_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
                               name='stage5_1x1_conv',
@@ -755,11 +767,9 @@ def callback_preparation(model, hyper):
     """
     timer = TimerCallback()
     timer.set_model(model)
-    tensorboard_callback = TensorBoard(os.path.join(TENSORBOARD_DIR, str(Config.model_loss) +
-                                                    '_' + hyper +'_tb_logs'))
+    tensorboard_callback = TensorBoard(os.path.join(TENSORBOARD_DIR, hyper +'_tb_logs'))
     checkpoint_callback = ModelCheckpoint(os.path.join(CHECKPOINT_DIR,
-                                                       str(Config.model_loss) +
-                                                       '_'+hyper + '_cp.h5'), period=1)
+                                                       hyper + '_cp.h5'), period=1)
     return [tensorboard_callback, checkpoint_callback, timer]
 
 
@@ -770,11 +780,23 @@ def tune_loss_weight():
     """
     print('weight initialized')
     det_weight = [np.array([0.2, 0.8]),np.array([0.1, 0.9]), np.array([0.15, 0.85])]
-    l2_weight = 0.01
-    fkg_smooth_factor = [0.5, 1, 2, 3]
-    bkg_smooth_factor = [3, 2, 1, 0.5]
-    ind_factor = []
-    return [det_weight, fkg_smooth_factor, l2_weight, bkg_smooth_factor]
+    l2_weight = 0.001
+
+    fkg_smooth_factor = [0.5, 1, 2, 3, 4, 5]
+    bkg_smooth_factor = [0.5, 1, 2, 3, 4, 5]
+    fkb_extend_smooth_factor = [0.6, 0.7, 0.9, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9,
+                                2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.1, 3.2, 3.3,
+                                3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.1, 4.2, 4.3, 4.4, 4.5]
+    bkg_extend_smooth_factor = [0.6, 0.7, 0.9, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9,
+                                2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.1, 3.2, 3.3,
+                                3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.1, 4.2, 4.3, 4.4, 4.5]
+    det_extend_weight = [np.array(0.21, 0.79), np.array(0.19, 0.81),
+                         np.array(0.18, 0.82), np.array(0.17, 0.83),
+                         np.array(0.22, 0.78), np.array(0.23, 0.77),
+                         np.array(0.24, 0.76)]
+    ind_factor = [np.array([0.2, 0.8]),np.array([0.1, 0.9]), np.array([0.15, 0.85])]
+    return [det_weight, fkg_smooth_factor, l2_weight, bkg_smooth_factor,
+            fkb_extend_smooth_factor, bkg_extend_smooth_factor, det_extend_weight]
 
 
 def save_model_weights(hyper):
@@ -796,7 +818,7 @@ def lr_scheduler(epoch):
         print('Current learning rate is :{}'.format(lr))
     if epoch == 100:
         lr = 0.001
-        print('Learning rate is modified after 5 epoch {}'.format(lr))
+        print('Learning rate is modified after 100 epoch {}'.format(lr))
     if epoch == 150:
         lr = 0.0001
     if epoch == 200:
@@ -823,10 +845,10 @@ if __name__ == '__main__':
     #NUM_TO_CROP, NUM_TO_AUG = 20, 10
 
     data = data_prepare(print_input_shape=True, print_image_shape=True)
-    network = Detnet(l2_regularizer=hyper_para[2])
+    network = Detnet()
     optimizer = SGD(lr=0.01, decay=0.0001, momentum=0.9, nesterov=True)
 
-    for i, bkg_weight in enumerate(hyper_para[0]):
+    for i, det_weight in enumerate(hyper_para[0]):
         if Config.model_loss == 'focal_double':
             print('This model is using {}'.format(Config.model_loss))
             for j, fkg_weight in enumerate(hyper_para[1]):
@@ -837,7 +859,7 @@ if __name__ == '__main__':
 
                     detnet_model = detnet_model_compile(nn=network,
                                                         summary=Config.summary,
-                                                        det_loss_weight=bkg_weight,
+                                                        det_loss_weight=det_weight,
                                                         optimizer=optimizer,
                                                         fkg_smooth_factor=fkg_weight,
                                                         bkg_smooth_factor=bkg_weight)
@@ -910,5 +932,42 @@ if __name__ == '__main__':
                                        callbacks=list_callback)
 
             detnet_model.save_weights(model_weights_saver)
+
+
+    # Extension program.
+    if Config.model_loss == 'focal_double' or Config.extend_program == True:
+        for i, det_weight in enumerate(hyper_para[6]):
+            if Config.model_loss == 'focal_double':
+                print('This model is using {}'.format(Config.model_loss))
+                for j, fkg_weight in enumerate(hyper_para[4]):
+                    for k, bkg_weight in enumerate(hyper_para[5]):
+                        hyper = '{}_loss:{}_lr:0.01_fkg:{}_bkg:{}'.format(Config.backbone, Config.model_loss,
+                                                                          fkg_weight,
+                                                                          bkg_weight)  # _l2:{}_bkg:{}'.format()
+                        model_weights_saver = save_model_weights(hyper)
+
+                        detnet_model = detnet_model_compile(nn=network,
+                                                            summary=Config.summary,
+                                                            det_loss_weight=det_weight,
+                                                            optimizer=optimizer,
+                                                            fkg_smooth_factor=fkg_weight,
+                                                            bkg_smooth_factor=bkg_weight)
+                        print('base detection is training')
+                        list_callback = callback_preparation(detnet_model, hyper)
+                        list_callback.append(LearningRateScheduler(lr_scheduler))
+                        detnet_model.fit_generator(ori_shape_generator_with_heavy_aug(data[0],
+                                                                                      data[1],
+                                                                                      batch_size=BATCH_SIZE,
+                                                                                      aug_num=NUM_TO_AUG),
+                                                   epochs=EPOCHS,
+                                                   steps_per_epoch=TRAIN_STEP_PER_EPOCH,
+                                                   validation_data=ori_shape_generator_with_heavy_aug(
+                                                       data[2], data[3], batch_size=BATCH_SIZE,
+                                                       aug_num=NUM_TO_AUG),
+                                                   validation_steps=2,
+                                                   callbacks=list_callback)
+
+                        detnet_model.save_weights(model_weights_saver)
+
 
 

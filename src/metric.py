@@ -62,7 +62,7 @@ def non_max_suppression(img, overlap_thresh=0.1, max_boxes=2000, r=5, prob_thres
 
     return boxes
 
-def get_metrics(gt, pred, r=3):
+def get_metrics(gt, pred, r=3, print_single_result=True):
     # calculate precise, recall and f1 score
     gt = np.array(gt).astype('int')
     if pred == []:
@@ -102,5 +102,6 @@ def get_metrics(gt, pred, r=3):
         precision = tp / (pred.shape[0] + 1e-7)
         recall = tp / (gt.shape[0] + 1e-7)
         f1_score = 2 * (precision * recall / (precision + recall + 1e-7))
-        print('P: {}, R: {}, F1: {}, true_positive: {}'.format(precision, recall, f1_score, tp))
+        if print_single_result:
+            print('P: {}, R: {}, F1: {}, true_positive: {}'.format(precision, recall, f1_score, tp))
         return precision, recall, f1_score, tp
