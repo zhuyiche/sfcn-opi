@@ -853,8 +853,10 @@ if __name__ == '__main__':
             print('This model is using {}'.format(Config.model_loss))
             for j, fkg_weight in enumerate(hyper_para[1]):
                 for k, bkg_weight in enumerate(hyper_para[3]):
-                    hyper = '{}_loss:{}_lr:0.01_fkg:{}_bkg:{}'.format(Config.backbone, Config.model_loss, fkg_weight,
-                                                                              bkg_weight)  # _l2:{}_bkg:{}'.format()
+                    hyper = '{}_loss:{}_det:{}_fkg:{}_bkg:{}_lr:0.01'.format(Config.backbone, Config.model_loss,
+                                                                             det_weight[0],
+                                                                             fkg_weight,
+                                                                             bkg_weight)  # _l2:{}_bkg:{}'.format()
                     model_weights_saver = save_model_weights(hyper)
 
                     detnet_model = detnet_model_compile(nn=network,
@@ -883,7 +885,7 @@ if __name__ == '__main__':
         if Config.model_loss == 'focal' or Config.model_loss == 'focal_no':
             print('This model is using {}'.format(Config.model_loss))
             for order, loss in enumerate(hyper_para[1]):
-                hyper = '{}_loss:{}_lr:0.01_fkg:{}'.format(Config.backbone, Config.model_loss, loss, bkg_weight[0]) #_l2:{}_bkg:{}'.format()
+                hyper = '{}_loss:{}_det:{}_lr:0.01'.format(Config.backbone, Config.model_loss, loss, det_weight[0]) #_l2:{}_bkg:{}'.format()
                 model_weights_saver = save_model_weights(hyper)
 
                 detnet_model = detnet_model_compile(nn=network,
@@ -941,9 +943,11 @@ if __name__ == '__main__':
                 print('This model is using {}'.format(Config.model_loss))
                 for j, fkg_weight in enumerate(hyper_para[4]):
                     for k, bkg_weight in enumerate(hyper_para[5]):
-                        hyper = '{}_loss:{}_lr:0.01_fkg:{}_bkg:{}'.format(Config.backbone, Config.model_loss,
-                                                                          fkg_weight,
-                                                                          bkg_weight)  # _l2:{}_bkg:{}'.format()
+                        hyper = '{}_loss:{}_det:{}_fkg:{}_bkg:{}_lr:0.01'.format(Config.backbone,
+                                                                                 Config.model_loss,
+                                                                                 det_weight[0],
+                                                                                 fkg_weight,
+                                                                                 bkg_weight)
                         model_weights_saver = save_model_weights(hyper)
 
                         detnet_model = detnet_model_compile(nn=network,
