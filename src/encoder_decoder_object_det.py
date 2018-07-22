@@ -168,6 +168,40 @@ class Detnet:
         x_convblock_output = Activation('relu', name=str(stage) + '_' + str(block) + '_convblock_act_output',
                        trainable=trainable)(x_add)
         return x_convblock_output
+
+    def fcn_27(self, inputs, filters, stages, trainable=True):
+        x = inputs
+        x_id_20 = self.identity_block_3(f=filters[0], stage=stages[0], block=1, inputs=x, trainable=trainable)
+        x_id_21 = self.identity_block_3(f=filters[0], stage=stages[0], block=2, inputs=x_id_20, trainable=trainable)
+        x_id_22 = self.identity_block_3(f=filters[0], stage=stages[0], block=3, inputs=x_id_21, trainable=trainable)
+        x_id_23 = self.identity_block_3(f=filters[0], stage=stages[0], block=4, inputs=x_id_22, trainable=trainable)
+        x_id_24 = self.identity_block_3(f=filters[0], stage=stages[0], block=5, inputs=x_id_23, trainable=trainable)
+        x_id_25 = self.identity_block_3(f=filters[0], stage=stages[0], block=6, inputs=x_id_24, trainable=trainable)
+        x_id_26 = self.identity_block_3(f=filters[0], stage=stages[0], block=7, inputs=x_id_25, trainable=trainable)
+        x_id_27 = self.identity_block_3(f=filters[0], stage=stages[0], block=8, inputs=x_id_26, trainable=trainable)
+        x_id_28 = self.identity_block_3(f=filters[0], stage=stages[0], block=9, inputs=x_id_27, trainable=trainable)
+
+        x_conv_3 = self.convolution_block_3(f=filters[1], stage=stages[1], block=1, inputs=x_id_28, trainable=trainable)
+        x_id_31 = self.identity_block_3(f=filters[1], stage=stages[1], block=2, inputs=x_conv_3, trainable=trainable)
+        x_id_32 = self.identity_block_3(f=filters[1], stage=stages[1], block=3, inputs=x_id_31, trainable=trainable)
+        x_id_33 = self.identity_block_3(f=filters[1], stage=stages[1], block=4, inputs=x_id_32, trainable=trainable)
+        x_id_34 = self.identity_block_3(f=filters[1], stage=stages[1], block=5, inputs=x_id_33, trainable=trainable)
+        x_id_35 = self.identity_block_3(f=filters[1], stage=stages[1], block=6, inputs=x_id_34, trainable=trainable)
+        x_id_36 = self.identity_block_3(f=filters[1], stage=stages[1], block=7, inputs=x_id_35, trainable=trainable)
+        x_id_37 = self.identity_block_3(f=filters[1], stage=stages[1], block=8, inputs=x_id_36, trainable=trainable)
+        x_id_38 = self.identity_block_3(f=filters[1], stage=stages[1], block=9, inputs=x_id_37, trainable=trainable)
+
+
+        x_conv_4 = self.convolution_block_3(f=filters[2], stage=stages[2], block=1, inputs=x_id_38, trainable=trainable)
+        x_id_41 = self.identity_block_3(f=filters[2], stage=stages[2], block=2, inputs=x_conv_4, trainable=trainable)
+        x_id_42 = self.identity_block_3(f=filters[2], stage=stages[2], block=3, inputs=x_id_41, trainable=trainable)
+        x_id_43 = self.identity_block_3(f=filters[2], stage=stages[2], block=4, inputs=x_id_42, trainable=trainable)
+        x_id_44 = self.identity_block_3(f=filters[2], stage=stages[2], block=5, inputs=x_id_43, trainable=trainable)
+        x_id_45 = self.identity_block_3(f=filters[2], stage=stages[2], block=6, inputs=x_id_44, trainable=trainable)
+        x_id_46 = self.identity_block_3(f=filters[2], stage=stages[2], block=7, inputs=x_id_45, trainable=trainable)
+        x_id_47 = self.identity_block_3(f=filters[2], stage=stages[2], block=8, inputs=x_id_46, trainable=trainable)
+        x_id_48 = self.identity_block_3(f=filters[2], stage=stages[2], block=9, inputs=x_id_47, trainable=trainable)
+        return x_id_28, x_id_38, x_id_48
     #############################
     # Resnet 50
     #############################
@@ -342,11 +376,47 @@ class Detnet:
         x_add = Add(name=str(stage) + '_dilated_project_add')([x_more, x_shortcut_project])
         x_dilated_output = Activation('relu', name=str(stage) + '_dilated_project_finalRELU')(x_add)
         return x_dilated_output
+    ####################################
+    # FCN 27 as in paper sfcn-opi
+    ####################################
+    def fcn27_backbone(self):
+        #tf.reset_default_graph()
+        img_input = Input(self.input_shape)
+        #########
+        # Adapted first stage
+        #########
+        x_stage1 = self.first_layer(inputs=img_input)
+        x_stage2, x_stage3, x_stage4 = self.resnet_50(x_stage1, [32, 64, 128], stages=[2, 3, 4])
+        x_stage3_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
+                              name = 'stage3_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage3)
+        #x_stage3_1x1 = BatchNormalization(name='x_stage3_1x1_BN')(x_stage3_1x1)
+        x_stage4_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
+                              name = 'stage4_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage4)
+        x_stage4_1x1 = BatchNormalization(name='x_stage4_1x1_BN')(x_stage4_1x1)
+        x_stage4_1x1 = Activation('relu')(x_stage4_1x1)
+        x_stage4_1x1 = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2),
+                                              padding='same',
+                                              kernel_regularizer=keras.regularizers.l2(self.l2r))(x_stage4_1x1)
+        #x_stage4_1x1 = BatchNormalization()(x_stage4_1x1)
+        #x_stage6_1x1 = BatchNormalization(name='x_stage6_1x1_BN')(x_stage6_1x1)
 
+        stage_34 = Add(name='stage3_add_4')([x_stage3_1x1, x_stage4_1x1])
+        #stage_456_upsample = BatchNormalization(name='stage_456_upsample_BN')(stage_456_upsample)
+        #stage_3456_upsample = BatchNormalization(name='stage_3456_upsample_BN')(stage_3456_upsample)
+        x_output_b4_softmax = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2),
+                                              padding='same', kernel_regularizer=l2(self.l2r),
+                                              name='Deconv_b4_softmax_output')(stage_34)
+        x_output = Activation('softmax', name='Final_Softmax')(x_output_b4_softmax)
+        detnet_model = Model(inputs=img_input,
+                             outputs=x_output)
+        return detnet_model
     ####################################
     # Full structure of encoder-decoder
     ####################################
     def detnet_resnet50_backbone(self):
+        #tf.reset_default_graph()
         img_input = Input(self.input_shape)
         #########
         # Adapted first stage
@@ -366,30 +436,30 @@ class Detnet:
         x_stage2_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
                               name='stage2_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage2)
-        x_stage2_1x1 = BatchNormalization(name='x_stage2_1x1_BN')(x_stage2_1x1)
+        #x_stage2_1x1 = BatchNormalization(name='x_stage2_1x1_BN')(x_stage2_1x1)
         x_stage3_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
                               name = 'stage3_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage3)
-        x_stage3_1x1 = BatchNormalization(name='x_stage3_1x1_BN')(x_stage3_1x1)
+        #x_stage3_1x1 = BatchNormalization(name='x_stage3_1x1_BN')(x_stage3_1x1)
         x_stage4_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
                               name = 'stage4_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage4)
-        x_stage4_1x1 = BatchNormalization(name='x_stage4_1x1_BN')(x_stage4_1x1)
+        #x_stage4_1x1 = BatchNormalization(name='x_stage4_1x1_BN')(x_stage4_1x1)
         x_stage5_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
                               name='stage5_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage5)
-        x_stage5_1x1 = BatchNormalization(name='x_stage5_1x1_BN')(x_stage5_1x1)
+        #x_stage5_1x1 = BatchNormalization(name='x_stage5_1x1_BN')(x_stage5_1x1)
         x_stage6_1x1 = Conv2D(filters=2, kernel_size=(1, 1), padding='same',
                               name='stage6_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage6)
-        x_stage6_1x1 = BatchNormalization(name='x_stage6_1x1_BN')(x_stage6_1x1)
+        #x_stage6_1x1 = BatchNormalization(name='x_stage6_1x1_BN')(x_stage6_1x1)
 
         stage_56 = Add(name='stage5_add_6')([x_stage6_1x1, x_stage5_1x1])
         stage_456 = Add(name='stage4_add_56')([stage_56, x_stage4_1x1])
         stage_456_upsample = Conv2DTranspose(filters=2, kernel_size=(1, 1), strides=(2, 2),
                                              kernel_regularizer=keras.regularizers.l2(self.l2r),
                                              name='stage456_upsample')(stage_456)
-        stage_456_upsample = BatchNormalization(name='stage_456_upsample_BN')(stage_456_upsample)
+        #stage_456_upsample = BatchNormalization(name='stage_456_upsample_BN')(stage_456_upsample)
 
         stage_3456 = Add(name='stage3_add_456')([stage_456_upsample, x_stage3_1x1])
 
@@ -397,7 +467,7 @@ class Detnet:
                                               padding='same',
                                               kernel_regularizer=keras.regularizers.l2(self.l2r),
                                               name='stage3456_upsample')(stage_3456)
-        stage_3456_upsample = BatchNormalization(name='stage_3456_upsample_BN')(stage_3456_upsample)
+        #stage_3456_upsample = BatchNormalization(name='stage_3456_upsample_BN')(stage_3456_upsample)
 
         stage_23456 = Add(name='stage2_add_3456')([stage_3456_upsample, x_stage2_1x1])
         x_output_b4_softmax = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2),
@@ -408,7 +478,119 @@ class Detnet:
                              outputs=x_output)
         return detnet_model
 
+    def detnet_resnet50_encoder_deep_backbone(self):
+        #tf.reset_default_graph()
+        img_input = Input(self.input_shape)
+        #########
+        # Adapted first stage
+        #########
+        x_stage1 = self.first_layer(inputs=img_input)
+        x_stage2, x_stage3, x_stage4 = self.resnet_50(x_stage1, [64, 128, 256], stages=[2, 3, 4])
+
+        #########
+        # following layer proposed by DetNet
+        #########
+        x_stage5_B = self.dilated_with_projection(x_stage4, stage=5)
+        x_stage5_A1 = self.dilated_bottleneck(x_stage5_B, stage=5, block=1)
+        x_stage5 = self.dilated_bottleneck(x_stage5_A1, stage=5, block=2)
+        x_stage6_B = self.dilated_with_projection(x_stage5, stage=6)
+        x_stage6_A1 = self.dilated_bottleneck(x_stage6_B, stage=6, block=1)
+        x_stage6 = self.dilated_bottleneck(x_stage6_A1, stage=6, block=2)
+        x_stage2_1x1 = Conv2D(filters=64, kernel_size=(1, 1), padding='same',
+                              name='stage2_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage2)
+        x_stage2_1x1 = BatchNormalization(name='x_stage2_1x1_BN')(x_stage2_1x1)
+        x_stage3_1x1 = Conv2D(filters=128, kernel_size=(1,1), padding='same',
+                              name = 'stage3_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage3)
+        x_stage3_1x1 = BatchNormalization(name='x_stage3_1x1_BN')(x_stage3_1x1)
+        x_stage4_1x1 = Conv2D(filters=256, kernel_size=(1,1), padding='same',
+                              name = 'stage4_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage4)
+        x_stage4_1x1 = BatchNormalization(name='x_stage4_1x1_BN')(x_stage4_1x1)
+        x_stage5_1x1 = Conv2D(filters=256, kernel_size=(1, 1), padding='same',
+                              name='stage5_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage5)
+        x_stage5_1x1 = BatchNormalization(name='x_stage5_1x1_BN')(x_stage5_1x1)
+        x_stage6_1x1 = Conv2D(filters=256, kernel_size=(1, 1), padding='same',
+                              name='stage6_1x1_conv',
+                              kernel_regularizer=l2(self.l2r))(x_stage6)
+        x_stage6_1x1 = BatchNormalization(name='x_stage6_1x1_BN')(x_stage6_1x1)
+
+        stage_56 = Add(name='stage5_add_6')([x_stage6_1x1, x_stage5_1x1])
+        stage_456 = Add(name='stage4_add_56')([stage_56, x_stage4_1x1])
+        #########
+        # Stage 456 part
+        #########
+        stage_456_upsample = Conv2DTranspose(filters=128, kernel_size=(1, 1), strides=(2, 2),
+                                             kernel_regularizer=keras.regularizers.l2(self.l2r),
+                                             name='stage456_upsample')(stage_456)
+        stage_456_upsample = BatchNormalization(name='stage_456_upsample_BN')(stage_456_upsample)
+        # stage456 corresponding to stage 4 at resnet50 which contains 6 convolution layer
+        stage_456_upsample = Activation('relu', name='stage_456_upsample_RELU')(stage_456_upsample
+                                                                                )
+        stage_456_upsample = Conv3l2(filters=128, kernel_regularizer_weight=self.l2r,
+                                     name='stage_456_Conv_1')(stage_456_upsample)
+        stage_456_upsample = BatchNormalization(name='stage_456_BN_1')(stage_456_upsample)
+        # stage456 corresponding to stage 4 at resnet50 which contains 6 convolution layer
+        stage_456_upsample = Activation('relu', name='stage_456_RELU_1')(stage_456_upsample)
+
+        stage_456_upsample = Conv3l2(filters=128, kernel_regularizer_weight=self.l2r,
+                                     name='stage_456_Conv_2')(stage_456_upsample)
+        stage_456_upsample = BatchNormalization(name='stage_456_BN_2')(stage_456_upsample)
+        # stage456 corresponding to stage 4 at resnet50 which contains 6 convolution layer
+        stage_456_upsample = Activation('relu', name='stage_456_RELU_2')(stage_456_upsample)
+
+        stage_456_upsample = Conv3l2(filters=128, kernel_regularizer_weight=self.l2r,
+                                     name='stage_456_Conv_3')(stage_456_upsample)
+        stage_456_upsample = BatchNormalization(name='stage_456_BN_3')(stage_456_upsample)
+        # stage456 corresponding to stage 4 at resnet50 which contains 6 convolution layer
+
+        #########
+        # Stage 3456 part
+        #########
+        stage_3456 = Add(name='stage3_add_456')([stage_456_upsample, x_stage3_1x1])
+
+        stage_3456_upsample = Conv2DTranspose(filters=64, kernel_size=(3, 3), strides=(2, 2),
+                                              padding='same',
+                                              kernel_regularizer=keras.regularizers.l2(self.l2r),
+                                              name='stage3456_upsample')(stage_3456)
+        stage_3456_upsample = BatchNormalization(name='stage_3456_upsample_BN')(stage_3456_upsample)
+        stage_3456_upsample = Activation('relu', name='stage_3456_upsample_RELU')(stage_3456_upsample)
+
+        stage_3456_upsample = Conv3l2(filters=64, kernel_regularizer_weight=self.l2r,
+                                     name='stage_3456_Conv_1')(stage_3456_upsample)
+        stage_3456_upsample = BatchNormalization(name='stage_3456_BN_1')(stage_3456_upsample)
+        stage_3456_upsample = Activation('relu', name='stage_3456_RELU_1')(stage_3456_upsample)
+
+        stage_3456_upsample = Conv3l2(filters=64, kernel_regularizer_weight=self.l2r,
+                                      name='stage_3456_Conv_2')(stage_3456_upsample)
+        stage_3456_upsample = BatchNormalization(name='stage_3456_BN_2')(stage_3456_upsample)
+
+
+        stage_23456 = Add(name='stage2_add_3456')([stage_3456_upsample, x_stage2_1x1])
+        x_output_b4_softmax = Conv2DTranspose(filters=32, kernel_size=(3, 3), strides=(2, 2),
+                                              padding='same', kernel_regularizer=l2(self.l2r),
+                                              name='Deconv_b4_softmax_output')(stage_23456)
+        x_output_b4_softmax = BatchNormalization()(x_output_b4_softmax)
+        x_output_b4_softmax = Activation('relu')(x_output_b4_softmax)
+        x_output_b4_softmax = Conv3l2(filters=32, kernel_regularizer_weight=self.l2r)(x_output_b4_softmax)
+        x_output_b4_softmax = BatchNormalization()(x_output_b4_softmax)
+        x_output_b4_softmax = Activation('relu')(x_output_b4_softmax)
+        x_output_b4_softmax = Conv2D(kernel_size=(1,1),
+                                     filters=2, padding='same', kernel_regularizer=l2(self.l2r))(x_output_b4_softmax)
+        x_output_b4_softmax = BatchNormalization()(x_output_b4_softmax)
+        x_output_b4_softmax = Activation('relu')(x_output_b4_softmax)
+        x_output_b4_softmax = Conv2D(kernel_size=(3,3), padding='same', kernel_regularizer=l2(self.l2r),
+                                     filters=2)(x_output_b4_softmax)
+
+        x_output = Activation('softmax', name='Final_Softmax')(x_output_b4_softmax)
+        detnet_model = Model(inputs=img_input,
+                             outputs=x_output)
+        return detnet_model
+
     def detnet_resnet50_encoder_shallow_backbone(self):
+        #tf.reset_default_graph()
         img_input = Input(self.input_shape)
         #########
         # Adapted first stage
@@ -507,6 +689,7 @@ class Detnet:
         return detnet_model
 
     def detnet_resnet101_backbone(self):
+        #tf.reset_default_graph()
         img_input = Input(self.input_shape)
         #########
         # Adapted first stage
@@ -572,6 +755,7 @@ class Detnet:
         return detnet_model
 
     def detnet_resnet152_backbone(self):
+        #tf.reset_default_graph()
         img_input = Input(self.input_shape)
         #########
         # Adapted first stage
@@ -750,9 +934,9 @@ def heavy_aug_on_fly(img, det_mask):
                 # These are additional augmentation.
                 #iaa.ContrastNormalization((0.75, 1.5))
 
-            ])
-            #)
-        ])#, random_order=True)
+            ])])
+            #elasitic_sometime(
+             #   iaa.ElasticTransformation(alpha=(0.5, 3.5), sigma=0.25), random_order=True])
         """
                     edge_detect_sometime(iaa.OneOf([
                         iaa.EdgeDetect(alpha=(0, 0.7)),
@@ -838,6 +1022,11 @@ def detnet_model_compile(nn, det_loss_weight,
         detnet_model=nn.detnet_resnet152_backbone()
     elif Config.backbone == 'resnet50_encoder_shallow':
         detnet_model=nn.detnet_resnet50_encoder_shallow_backbone()
+    elif Config.backbone == 'resnet50_encoder_deep':
+        detnet_model=nn.detnet_resnet50_encoder_deep_backbone()
+    elif Config.backbone == 'fcn27':
+        detnet_model=nn.fcn27_backbone()
+
 
     print('The backbone structure is using {}'.format(Config.backbone))
     detnet_model.compile(optimizer=optimizer,
@@ -847,6 +1036,7 @@ def detnet_model_compile(nn, det_loss_weight,
         detnet_model.summary()
     return detnet_model
 
+#def parallel_model():
 
 def callback_preparation(model, hyper):
     """
@@ -858,7 +1048,10 @@ def callback_preparation(model, hyper):
     tensorboard_callback = TensorBoard(os.path.join(TENSORBOARD_DIR, hyper +'_tb_logs'))
     checkpoint_callback = ModelCheckpoint(os.path.join(CHECKPOINT_DIR,
                                                        hyper + '_cp.h5'), period=1)
-    return [tensorboard_callback, checkpoint_callback, timer]
+    earlystop_callback = EarlyStopping(monitor='val_loss',
+                                       patience=5,
+                                       min_delta=0.001)
+    return [tensorboard_callback, checkpoint_callback, timer, earlystop_callback]
 
 
 def tune_loss_weight():
@@ -922,27 +1115,30 @@ if __name__ == '__main__':
     CROP_SIZE = 64
     BATCH_SIZE = Config.image_per_gpu * Config.gpu_count
 
-    EPOCHS = 250
+    EPOCHS = Config.epoch
 
 
     if Config.backbone == 'resnet101':
         NUM_TO_AUG = 6
         TRAIN_STEP_PER_EPOCH = 32
     elif Config.backbone == 'resnet152':
-        NUM_TO_AUG = 5
-        TRAIN_STEP_PER_EPOCH = 40
-    elif Config.backbone == 'resnet50':
-        NUM_TO_AUG = 5
-        TRAIN_STEP_PER_EPOCH = 40
-    elif Config.backbone == 'resnet50_encoder_shallow':
         NUM_TO_AUG = 3
-        TRAIN_STEP_PER_EPOCH = 65
+        TRAIN_STEP_PER_EPOCH = 50
+    elif Config.backbone == 'resnet50' or Config.backbone == 'fcn27':
+        NUM_TO_AUG = 5
+        TRAIN_STEP_PER_EPOCH = 40
+    elif Config.backbone == 'resnet50_encoder_shallow' or Config.backbone == 'resnet50_encoder_deep':
+        NUM_TO_AUG = 3
+        TRAIN_STEP_PER_EPOCH = 60
     #NUM_TO_CROP, NUM_TO_AUG = 20, 10
-
     data = data_prepare(print_input_shape=True, print_image_shape=True)
     network = Detnet()
-    optimizer = SGD(lr=0.01, decay=0.0001, momentum=0.9, nesterov=True)
+    optimizer = SGD(lr=0.01, decay=0.00001, momentum=0.9, nesterov=True)
 
+    # multi gpu
+    list_gpu = []
+    if Config.gpu_count > 1:
+        parallel_model = keras.utils.multi_gpu_model(network, gpus=list_gpu)
     for i, det_weight in enumerate(hyper_para[0]):
         if Config.model_loss == 'focal_double':
             print('------------------------------------')
@@ -976,7 +1172,7 @@ if __name__ == '__main__':
                                                    validation_data=ori_shape_generator_with_heavy_aug(
                                                        data[2], data[3], batch_size=BATCH_SIZE,
                                                        aug_num=NUM_TO_AUG),
-                                                   validation_steps=2,
+                                                   validation_steps=10,
                                                    callbacks=list_callback)
 
                         detnet_model.save_weights(model_weights_saver)
