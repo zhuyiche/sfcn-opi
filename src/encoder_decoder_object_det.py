@@ -168,7 +168,9 @@ class Detnet:
         x_convblock_output = Activation('relu', name=str(stage) + '_' + str(block) + '_convblock_act_output',
                        trainable=trainable)(x_add)
         return x_convblock_output
-
+    #############################
+    #
+    #
     def fcn_27(self, inputs, filters, stages, trainable=True):
         x = inputs
         x_id_20 = self.identity_block_3(f=filters[0], stage=stages[0], block=1, inputs=x, trainable=trainable)
@@ -376,6 +378,7 @@ class Detnet:
         x_add = Add(name=str(stage) + '_dilated_project_add')([x_more, x_shortcut_project])
         x_dilated_output = Activation('relu', name=str(stage) + '_dilated_project_finalRELU')(x_add)
         return x_dilated_output
+
     ####################################
     # FCN 27 as in paper sfcn-opi
     ####################################
@@ -412,6 +415,113 @@ class Detnet:
         detnet_model = Model(inputs=img_input,
                              outputs=x_output)
         return detnet_model
+
+
+    #######################################
+    # Extra branch for every pyramid feature
+    #######################################
+    def feature_prediction_deconv_branch(self, C6=None, C5=None, C4=None, C3=None, C2=None):
+        """
+
+        :param features: input feature is from every feature pyramid layer,
+                         should've been already connect with 1x1 convolution layer.
+        """
+        def _64to512(input, type):
+            x_deconv128 = Conv2DTranspose(kernel_size=(3,3),
+                                    filters=256, strides=(2, 2), name=type + '_deconv_1')(input)
+            x_deconv128 = BatchNormalization()(x_deconv128)
+            x_deconv128 = Activation('relu')(x_deconv128)
+            x_deconv256 = Conv2DTranspose(kernel_size=(3, 3),
+                                          filters=256, strides=(2, 2), name=type + '_deconv_2')(x_deconv128)
+            x_deconv256 = BatchNormalization()(x_deconv256)
+            x_deconv256 = Activation('relu')(x_deconv256)
+            x_deconv512 = Conv2DTranspose(kernel_size=(3, 3),
+                                          filters=2, strides=(2, 2), name=type + '_deconv_3')(x_deconv256)
+            return x_deconv512
+        # in detnet setting, C6.shape == C5.shape == C4.shape
+        C6_deconv = _64to512(C6, 'C6')
+        C5_deconv = _64to512(C5, 'C5')
+        C4_deconv = _64to512(C4, 'C4')
+        C3_deconv_256 = Conv2DTranspose(kernel_size=(3,3),
+                                    filters=256, strides=(2, 2), name='C3_deconv_1')(C3)
+        C3_deconv_256 = BatchNormalization()(C3_deconv_256)
+        C3_deconv_256 = Activation('relu')(C3_deconv_256)
+        C3_deconv_512 = Conv2DTranspose(kernel_size=(3,3), filters=2, strides=(2,2),name='C3_deconv_2')(C3_deconv_256)
+
+        C2_deconv_512 = Conv2DTranspose(kernel_size=(3,3),
+                                        filters=2, strides=(2,2), name='C2_deconv_1')(C2)
+
+        C23456_concat = Concatenate()([C6_deconv, C5_deconv, C4_deconv, C3_deconv_512, C2_deconv_512])
+
+        return C23456_concat
+
+    def detnet_resnet50_feature_deconv_branch_backbone(self):
+        #tf.reset_default_graph()
+        img_input = Input(self.input_shape)
+        #########
+        # Adapted first stage
+        #########
+        x_stage1 = self.first_layer(inputs=img_input)
+        x_stage2, x_stage3, x_stage4 = self.resnet_50(x_stage1, [32, 64, 128], stages=[2, 3, 4])
+
+        #########
+        # following layer proposed by DetNet
+        #########
+        x_stage5_B = self.dilated_with_projection(x_stage4, stage=5)
+        x_stage5_A1 = self.dilated_bottleneck(x_stage5_B, stage=5, block=1)
+        x_stage5 = self.dilated_bottleneck(x_stage5_A1, stage=5, block=2)
+        x_stage6_B = self.dilated_with_projection(x_stage5, stage=6)
+        x_stage6_A1 = self.dilated_bottleneck(x_stage6_B, stage=6, block=1)
+        x_stage6 = self.dilated_bottleneck(x_stage6_A1, stage=6, block=2)
+        x_stage2_1x1 = Conv2D(filters=64, kernel_size=(1, 1), padding='same',
+                              name='stage2_1x1_conv')(x_stage2)
+        #x_stage2_1x1 = BatchNormalization(name='x_stage2_1x1_BN')(x_stage2_1x1)
+        x_stage3_1x1 = Conv2D(filters=128, kernel_size=(1,1), padding='same',
+                              name = 'stage3_1x1_conv')(x_stage3)
+        #x_stage3_1x1 = BatchNormalization(name='x_stage3_1x1_BN')(x_stage3_1x1)
+        x_stage4_1x1 = Conv2D(filters=256, kernel_size=(1,1), padding='same',
+                              name = 'stage4_1x1_conv')(x_stage4)
+        #x_stage4_1x1 = BatchNormalization(name='x_stage4_1x1_BN')(x_stage4_1x1)
+        x_stage5_1x1 = Conv2D(filters=256, kernel_size=(1, 1), padding='same',
+                              name='stage5_1x1_conv')(x_stage5)
+        #x_stage5_1x1 = BatchNormalization(name='x_stage5_1x1_BN')(x_stage5_1x1)
+        x_stage6_1x1 = Conv2D(filters=256, kernel_size=(1, 1), padding='same',
+                              name='stage6_1x1_conv')(x_stage6)
+        #x_stage6_1x1 = BatchNormalization(name='x_stage6_1x1_BN')(x_stage6_1x1)
+
+
+        ## We add second branch to predict feature map on each feature pyramid
+        second_branch_concat = self.feature_prediction_deconv_branch(C6=x_stage6_1x1, C5=x_stage5_1x1,
+                                                                     C4=x_stage4_1x1, C3=x_stage3_1x1,
+                                                                     C2=x_stage2_1x1)
+
+        # Encoder part
+        stage_56 = Add(name='stage5_add_6')([x_stage6_1x1, x_stage5_1x1])
+        stage_456 = Add(name='stage4_add_56')([stage_56, x_stage4_1x1])
+        stage_456_upsample = Conv2DTranspose(filters=128, kernel_size=(1, 1), strides=(2, 2),
+                                             name='stage456_upsample')(stage_456)
+        #stage_456_upsample = BatchNormalization(name='stage_456_upsample_BN')(stage_456_upsample)
+
+        stage_3456 = Add(name='stage3_add_456')([stage_456_upsample, x_stage3_1x1])
+
+        stage_3456_upsample = Conv2DTranspose(filters=64, kernel_size=(3, 3), strides=(2, 2),
+                                              padding='same',
+                                              kernel_regularizer=keras.regularizers.l2(self.l2r),
+                                              name='stage3456_upsample')(stage_3456)
+        #stage_3456_upsample = BatchNormalization(name='stage_3456_upsample_BN')(stage_3456_upsample)
+
+        stage_23456 = Add(name='stage2_add_3456')([stage_3456_upsample, x_stage2_1x1]) # filters = 64
+        stage_23456_upsample = Conv2DTranspose(filters=32, kernel_size=(3, 3), strides=(2, 2),
+                                              padding='same', kernel_regularizer=l2(self.l2r),
+                                              name='Deconv_b4_softmax_output')(stage_23456)
+
+        x_output_concat = Concatenate()([stage_456_upsample, second_branch_concat])
+        x_output_concat = Conv2D
+        x_output = Activation('softmax', name='Final_Softmax')(x_output_concat)
+        detnet_model = Model(inputs=img_input,
+                             outputs=x_output)
+        return detnet_model
+
     ####################################
     # Full structure of encoder-decoder
     ####################################
@@ -499,23 +609,18 @@ class Detnet:
         x_stage2_1x1 = Conv2D(filters=64, kernel_size=(1, 1), padding='same',
                               name='stage2_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage2)
-        x_stage2_1x1 = BatchNormalization(name='x_stage2_1x1_BN')(x_stage2_1x1)
         x_stage3_1x1 = Conv2D(filters=128, kernel_size=(1,1), padding='same',
                               name = 'stage3_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage3)
-        x_stage3_1x1 = BatchNormalization(name='x_stage3_1x1_BN')(x_stage3_1x1)
         x_stage4_1x1 = Conv2D(filters=256, kernel_size=(1,1), padding='same',
                               name = 'stage4_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage4)
-        x_stage4_1x1 = BatchNormalization(name='x_stage4_1x1_BN')(x_stage4_1x1)
         x_stage5_1x1 = Conv2D(filters=256, kernel_size=(1, 1), padding='same',
                               name='stage5_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage5)
-        x_stage5_1x1 = BatchNormalization(name='x_stage5_1x1_BN')(x_stage5_1x1)
         x_stage6_1x1 = Conv2D(filters=256, kernel_size=(1, 1), padding='same',
                               name='stage6_1x1_conv',
                               kernel_regularizer=l2(self.l2r))(x_stage6)
-        x_stage6_1x1 = BatchNormalization(name='x_stage6_1x1_BN')(x_stage6_1x1)
 
         stage_56 = Add(name='stage5_add_6')([x_stage6_1x1, x_stage5_1x1])
         stage_456 = Add(name='stage4_add_56')([stage_56, x_stage4_1x1])
@@ -1110,7 +1215,10 @@ def lr_scheduler(epoch):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(Config.gpu)
+    if Config.gpu_count == 1:
+        os.environ["CUDA_VISIBLE_DEVICES"] = Config.gpu1
+    elif Config.gpu_count == 2:
+        os.environ["CUDA_VISIBLE_DEVICES"] = Config.gpu1 + ', ' + Config.gpu2
     hyper_para = tune_loss_weight()
     CROP_SIZE = 64
     BATCH_SIZE = Config.image_per_gpu * Config.gpu_count
@@ -1129,16 +1237,16 @@ if __name__ == '__main__':
         TRAIN_STEP_PER_EPOCH = 40
     elif Config.backbone == 'resnet50_encoder_shallow' or Config.backbone == 'resnet50_encoder_deep':
         NUM_TO_AUG = 3
-        TRAIN_STEP_PER_EPOCH = 60
+        TRAIN_STEP_PER_EPOCH = 80
     #NUM_TO_CROP, NUM_TO_AUG = 20, 10
     data = data_prepare(print_input_shape=True, print_image_shape=True)
     network = Detnet()
     optimizer = SGD(lr=0.01, decay=0.00001, momentum=0.9, nesterov=True)
 
     # multi gpu
-    list_gpu = []
+    list_gpu = [0, 2]
     if Config.gpu_count > 1:
-        parallel_model = keras.utils.multi_gpu_model(network, gpus=list_gpu)
+        parallel_model = keras.utils.multi_gpu_model(network, Config.gpu_count)
     for i, det_weight in enumerate(hyper_para[0]):
         if Config.model_loss == 'focal_double':
             print('------------------------------------')
