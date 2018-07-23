@@ -1,6 +1,6 @@
 import numpy as np
 
-def non_max_suppression(img, overlap_thresh=0.1, max_boxes=2000, r=5, prob_thresh=0.10):
+def non_max_suppression(img, overlap_thresh=0.1, max_boxes=2000, r=2, prob_thresh=0.10):
     x1s = []
     y1s = []
     x2s = []
