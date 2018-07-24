@@ -379,7 +379,7 @@ class Fcn_det:
 
         stage_67 = Add(name='add_stage_6_7')([x_stage6_1x1, x_stage7_1x1])
         stage_567 = Add(name='add_stage_5_6_7')([x_stage5_1x1, stage_67])
-        stage_567_upsample = Conv2DTranspose(filters=128, kernel_size=(1, 1), strides=(2, 2),padding='same',
+        stage_567_upsample = Conv2DTranspose(filters=128, kernel_size=(3, 3), strides=(2, 2),padding='same',
                                              name='stage_567_upsample',
                                              kernel_regularizer=l2(l2_weight))(stage_567)
         stage_4567 = Add(name='add_stage_4_567')([stage_567_upsample, x_stage4_1x1])
