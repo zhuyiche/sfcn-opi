@@ -10,17 +10,13 @@ from keras.optimizers import SGD
 from keras.callbacks import EarlyStopping, LearningRateScheduler, \
     TensorBoard,ModelCheckpoint, ReduceLROnPlateau, Callback
 from keras.regularizers import l2
-from util import load_data
+from util import load_data, set_gpu, set_num_step_and_aug, lr_scheduler, aug_on_fly, heavy_aug_on_fly
 import os, time
 from image_augmentation import ImageCropping
-from imgaug import augmenters as iaa
-import imgaug as ia
-from loss import detection_focal_loss_K, \
-    detection_loss_without_part2_K, detection_loss_K, \
-    detection_focal_loss_without_part2_K, detection_double_focal_loss_K,\
-    detection_double_focal_loss_indicator_K
+from loss import detection_focal_loss_K, detection_loss_K, detection_double_focal_loss_K, detection_double_focal_loss_indicator_K
 from config import Config
 from tensorflow.python.client import device_lib
+from encoder_append import identity_block_2, convolution_block_2, Fcn_det
 weight_decay = 0.005
 epsilon = 1e-7
 
@@ -168,42 +164,6 @@ class Detnet:
         x_convblock_output = Activation('relu', name=str(stage) + '_' + str(block) + '_convblock_act_output',
                        trainable=trainable)(x_add)
         return x_convblock_output
-    #############################
-    #
-    #
-    def fcn_27(self, inputs, filters, stages, trainable=True):
-        x = inputs
-        x_id_20 = self.identity_block_3(f=filters[0], stage=stages[0], block=1, inputs=x, trainable=trainable)
-        x_id_21 = self.identity_block_3(f=filters[0], stage=stages[0], block=2, inputs=x_id_20, trainable=trainable)
-        x_id_22 = self.identity_block_3(f=filters[0], stage=stages[0], block=3, inputs=x_id_21, trainable=trainable)
-        x_id_23 = self.identity_block_3(f=filters[0], stage=stages[0], block=4, inputs=x_id_22, trainable=trainable)
-        x_id_24 = self.identity_block_3(f=filters[0], stage=stages[0], block=5, inputs=x_id_23, trainable=trainable)
-        x_id_25 = self.identity_block_3(f=filters[0], stage=stages[0], block=6, inputs=x_id_24, trainable=trainable)
-        x_id_26 = self.identity_block_3(f=filters[0], stage=stages[0], block=7, inputs=x_id_25, trainable=trainable)
-        x_id_27 = self.identity_block_3(f=filters[0], stage=stages[0], block=8, inputs=x_id_26, trainable=trainable)
-        x_id_28 = self.identity_block_3(f=filters[0], stage=stages[0], block=9, inputs=x_id_27, trainable=trainable)
-
-        x_conv_3 = self.convolution_block_3(f=filters[1], stage=stages[1], block=1, inputs=x_id_28, trainable=trainable)
-        x_id_31 = self.identity_block_3(f=filters[1], stage=stages[1], block=2, inputs=x_conv_3, trainable=trainable)
-        x_id_32 = self.identity_block_3(f=filters[1], stage=stages[1], block=3, inputs=x_id_31, trainable=trainable)
-        x_id_33 = self.identity_block_3(f=filters[1], stage=stages[1], block=4, inputs=x_id_32, trainable=trainable)
-        x_id_34 = self.identity_block_3(f=filters[1], stage=stages[1], block=5, inputs=x_id_33, trainable=trainable)
-        x_id_35 = self.identity_block_3(f=filters[1], stage=stages[1], block=6, inputs=x_id_34, trainable=trainable)
-        x_id_36 = self.identity_block_3(f=filters[1], stage=stages[1], block=7, inputs=x_id_35, trainable=trainable)
-        x_id_37 = self.identity_block_3(f=filters[1], stage=stages[1], block=8, inputs=x_id_36, trainable=trainable)
-        x_id_38 = self.identity_block_3(f=filters[1], stage=stages[1], block=9, inputs=x_id_37, trainable=trainable)
-
-
-        x_conv_4 = self.convolution_block_3(f=filters[2], stage=stages[2], block=1, inputs=x_id_38, trainable=trainable)
-        x_id_41 = self.identity_block_3(f=filters[2], stage=stages[2], block=2, inputs=x_conv_4, trainable=trainable)
-        x_id_42 = self.identity_block_3(f=filters[2], stage=stages[2], block=3, inputs=x_id_41, trainable=trainable)
-        x_id_43 = self.identity_block_3(f=filters[2], stage=stages[2], block=4, inputs=x_id_42, trainable=trainable)
-        x_id_44 = self.identity_block_3(f=filters[2], stage=stages[2], block=5, inputs=x_id_43, trainable=trainable)
-        x_id_45 = self.identity_block_3(f=filters[2], stage=stages[2], block=6, inputs=x_id_44, trainable=trainable)
-        x_id_46 = self.identity_block_3(f=filters[2], stage=stages[2], block=7, inputs=x_id_45, trainable=trainable)
-        x_id_47 = self.identity_block_3(f=filters[2], stage=stages[2], block=8, inputs=x_id_46, trainable=trainable)
-        x_id_48 = self.identity_block_3(f=filters[2], stage=stages[2], block=9, inputs=x_id_47, trainable=trainable)
-        return x_id_28, x_id_38, x_id_48
     #############################
     # Resnet 50
     #############################
@@ -378,43 +338,6 @@ class Detnet:
         x_add = Add(name=str(stage) + '_dilated_project_add')([x_more, x_shortcut_project])
         x_dilated_output = Activation('relu', name=str(stage) + '_dilated_project_finalRELU')(x_add)
         return x_dilated_output
-
-    ####################################
-    # FCN 27 as in paper sfcn-opi
-    ####################################
-    def fcn27_backbone(self):
-        #tf.reset_default_graph()
-        img_input = Input(self.input_shape)
-        #########
-        # Adapted first stage
-        #########
-        x_stage1 = self.first_layer(inputs=img_input)
-        x_stage2, x_stage3, x_stage4 = self.resnet_50(x_stage1, [32, 64, 128], stages=[2, 3, 4])
-        x_stage3_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
-                              name = 'stage3_1x1_conv',
-                              kernel_regularizer=l2(self.l2r))(x_stage3)
-        #x_stage3_1x1 = BatchNormalization(name='x_stage3_1x1_BN')(x_stage3_1x1)
-        x_stage4_1x1 = Conv2D(filters=2, kernel_size=(1,1), padding='same',
-                              name = 'stage4_1x1_conv',
-                              kernel_regularizer=l2(self.l2r))(x_stage4)
-        x_stage4_1x1 = BatchNormalization(name='x_stage4_1x1_BN')(x_stage4_1x1)
-        x_stage4_1x1 = Activation('relu')(x_stage4_1x1)
-        x_stage4_1x1 = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2),
-                                              padding='same',
-                                              kernel_regularizer=keras.regularizers.l2(self.l2r))(x_stage4_1x1)
-        #x_stage4_1x1 = BatchNormalization()(x_stage4_1x1)
-        #x_stage6_1x1 = BatchNormalization(name='x_stage6_1x1_BN')(x_stage6_1x1)
-
-        stage_34 = Add(name='stage3_add_4')([x_stage3_1x1, x_stage4_1x1])
-        #stage_456_upsample = BatchNormalization(name='stage_456_upsample_BN')(stage_456_upsample)
-        #stage_3456_upsample = BatchNormalization(name='stage_3456_upsample_BN')(stage_3456_upsample)
-        x_output_b4_softmax = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2),
-                                              padding='same', kernel_regularizer=l2(self.l2r),
-                                              name='Deconv_b4_softmax_output')(stage_34)
-        x_output = Activation('softmax', name='Final_Softmax')(x_output_b4_softmax)
-        detnet_model = Model(inputs=img_input,
-                             outputs=x_output)
-        return detnet_model
 
 
     #######################################
@@ -985,88 +908,6 @@ def data_prepare(print_image_shape=False, print_input_shape=False):
     return [train_imgs, train_det,valid_imgs, valid_det,  test_imgs, test_det,]
 
 
-def aug_on_fly(img, det_mask, cls_mask):
-    """Do augmentation with different combination on each training batch
-    """
-    def image_basic_augmentation(image, masks, ratio_operations=0.9):
-        # without additional operations
-        # according to the paper, operations such as shearing, fliping horizontal/vertical,
-        # rotating, zooming and channel shifting will be apply
-        sometimes = lambda aug: iaa.Sometimes(ratio_operations, aug)
-        hor_flip_angle = np.random.uniform(0, 1)
-        ver_flip_angle = np.random.uniform(0, 1)
-        seq = iaa.Sequential([
-            sometimes(
-                iaa.SomeOf((0, 5), [
-                iaa.Fliplr(hor_flip_angle),
-                iaa.Flipud(ver_flip_angle),
-                iaa.Affine(shear=(-16, 16)),
-                iaa.Affine(scale={'x': (1, 1.6), 'y': (1, 1.6)}),
-                iaa.PerspectiveTransform(scale=(0.01, 0.1))
-            ]))
-        ])
-        det_mask, cls_mask = masks[0], masks[1]
-        seq_to_deterministic = seq.to_deterministic()
-        aug_img = seq_to_deterministic.augment_images(image)
-        aug_det_mask = seq_to_deterministic.augment_images(det_mask)
-        aug_cls_mask = seq_to_deterministic.augment_images(cls_mask)
-        return aug_img, aug_det_mask, aug_cls_mask
-
-    aug_image, aug_det_mask, aug_cls_mask = image_basic_augmentation(image=img, masks=[det_mask, cls_mask])
-    return aug_image, aug_det_mask, aug_cls_mask
-
-def heavy_aug_on_fly(img, det_mask):
-    """Do augmentation with different combination on each training batch
-    """
-
-    def image_heavy_augmentation(image, det_masks, ratio_operations=0.6):
-        # according to the paper, operations such as shearing, fliping horizontal/vertical,
-        # rotating, zooming and channel shifting will be apply
-        sometimes = lambda aug: iaa.Sometimes(ratio_operations, aug)
-        edge_detect_sometime = lambda aug: iaa.Sometimes(0.1, aug)
-        elasitic_sometime = lambda aug:iaa.Sometimes(0.2, aug)
-        add_gauss_noise = lambda aug: iaa.Sometimes(0.15, aug)
-        hor_flip_angle = np.random.uniform(0, 1)
-        ver_flip_angle = np.random.uniform(0, 1)
-        seq = iaa.Sequential([
-            iaa.SomeOf((0, 5), [
-                iaa.Fliplr(hor_flip_angle),
-                iaa.Flipud(ver_flip_angle),
-                iaa.Affine(shear=(-16, 16)),
-                iaa.Affine(scale={'x': (1, 1.6), 'y': (1, 1.6)}),
-                iaa.PerspectiveTransform(scale=(0.01, 0.1)),
-
-                # These are additional augmentation.
-                #iaa.ContrastNormalization((0.75, 1.5))
-
-            ])])
-            #elasitic_sometime(
-             #   iaa.ElasticTransformation(alpha=(0.5, 3.5), sigma=0.25), random_order=True])
-        """
-                    edge_detect_sometime(iaa.OneOf([
-                        iaa.EdgeDetect(alpha=(0, 0.7)),
-                        iaa.DirectedEdgeDetect(alpha=(0,0.7), direction=(0.0, 1.0)
-                                               )
-                    ])),
-                    add_gauss_noise(iaa.AdditiveGaussianNoise(loc=0,
-                                                              scale=(0.0, 0.05*255),
-                                                              per_channel=0.5)
-                                    ),
-                    iaa.Sometimes(0.3,
-                                  iaa.GaussianBlur(sigma=(0, 0.5))
-                                  ),
-                    elasitic_sometime(
-                        iaa.ElasticTransformation(alpha=(0.5, 3.5), sigma=0.25)
-                    """
-        seq_to_deterministic = seq.to_deterministic()
-        aug_img = seq_to_deterministic.augment_images(image)
-        aug_det_mask = seq_to_deterministic.augment_images(det_masks)
-        return aug_img, aug_det_mask
-
-    aug_image, aug_det_mask = image_heavy_augmentation(image=img, det_masks=det_mask)
-    return aug_image, aug_det_mask
-
-
 def ori_shape_generator_with_heavy_aug(features, det_labels, batch_size,
                                        aug_num=25):
     batch_features = np.zeros((batch_size * aug_num, 512, 512, 3))
@@ -1086,6 +927,19 @@ def ori_shape_generator_with_heavy_aug(features, det_labels, batch_size,
 
         yield batch_features, batch_det_labels
 
+def fcn_detnet_model_compile(nn, det_loss_weight,
+                         optimizer, summary=False,
+                         fkg_smooth_factor=None,
+                         bkg_smooth_factor=None):
+    loss_input = detection_double_focal_loss_K(det_loss_weight,
+                                                   fkg_smooth_factor,
+                                                   bkg_smooth_factor)
+    nn.compile(optimizer=optimizer,
+                      loss=loss_input,
+                      metrics=['accuracy'])
+    if summary==True:
+        detnet_model.summary()
+    return detnet_model
 
 def detnet_model_compile(nn, det_loss_weight,
                          optimizer, summary=False,
@@ -1104,10 +958,6 @@ def detnet_model_compile(nn, det_loss_weight,
         loss_input = detection_focal_loss_K(det_loss_weight, fkg_smooth_factor)
     elif Config.model_loss == 'base':
         loss_input = detection_loss_K(det_loss_weight)
-    elif Config.model_loss == 'base_no':
-        loss_input = detection_loss_without_part2_K(det_loss_weight)
-    elif Config.model_loss == 'focal_no':
-        loss_input = detection_focal_loss_without_part2_K(det_loss_weight, fkg_smooth_factor)
     elif Config.model_loss == 'focal_double':
         loss_input = detection_double_focal_loss_K(det_loss_weight,
                                                    fkg_smooth_factor,
@@ -1196,48 +1046,16 @@ def save_model_weights(hyper):
     return det_model_weights_saver
 
 
-def lr_scheduler(epoch):
-    lr = 0.01
-    if epoch < 100 and epoch != 0:
-        lr = lr - 0.0001
-    if epoch % 10 == 0:
-        print('Current learning rate is :{}'.format(lr))
-    if epoch == 100:
-        lr = 0.001
-        print('Learning rate is modified after 100 epoch {}'.format(lr))
-    if epoch == 150:
-        lr = 0.0001
-    if epoch == 200:
-        lr = 0.00001
-    if epoch == 250:
-        lr = 0.000001
-    return lr
-
 
 if __name__ == '__main__':
-    if Config.gpu_count == 1:
-        os.environ["CUDA_VISIBLE_DEVICES"] = Config.gpu1
-    elif Config.gpu_count == 2:
-        os.environ["CUDA_VISIBLE_DEVICES"] = Config.gpu1 + ', ' + Config.gpu2
+    set_gpu()
     hyper_para = tune_loss_weight()
     CROP_SIZE = 64
     BATCH_SIZE = Config.image_per_gpu * Config.gpu_count
 
     EPOCHS = Config.epoch
 
-
-    if Config.backbone == 'resnet101':
-        NUM_TO_AUG = 6
-        TRAIN_STEP_PER_EPOCH = 32
-    elif Config.backbone == 'resnet152':
-        NUM_TO_AUG = 3
-        TRAIN_STEP_PER_EPOCH = 50
-    elif Config.backbone == 'resnet50' or Config.backbone == 'fcn27':
-        NUM_TO_AUG = 5
-        TRAIN_STEP_PER_EPOCH = 40
-    elif Config.backbone == 'resnet50_encoder_shallow' or Config.backbone == 'resnet50_encoder_deep':
-        NUM_TO_AUG = 3
-        TRAIN_STEP_PER_EPOCH = 80
+    NUM_TO_AUG, TRAIN_STEP_PER_EPOCH = set_num_step_and_aug()
     #NUM_TO_CROP, NUM_TO_AUG = 20, 10
     data = data_prepare(print_input_shape=True, print_image_shape=True)
     network = Detnet()
@@ -1247,6 +1065,46 @@ if __name__ == '__main__':
     list_gpu = [0, 2]
     if Config.gpu_count > 1:
         parallel_model = keras.utils.multi_gpu_model(network, Config.gpu_count)
+
+
+    if Config.backbone == 'fcn36_fpn_predict':
+        fcn_detnet = Fcn_det()
+        print('------------------------------------')
+        print('This model is using {}'.format(Config.backbone))
+        print()
+        for i, det_weight in enumerate(hyper_para[0]):
+            for j, fkg_weight in enumerate(hyper_para[1]):
+                for k, bkg_weight in enumerate(hyper_para[3]):
+                    hyper = '{}_loss:{}_det:{}_fkg:{}_bkg:{}_lr:0.01'.format(Config.backbone, Config.model_loss,
+                                                                             det_weight[0],
+                                                                             fkg_weight,
+                                                                             bkg_weight)  # _l2:{}_bkg:{}'.format()
+                    print(hyper)
+                    print()
+                    model_weights_saver = save_model_weights(hyper)
+                    if not os.path.exists(model_weights_saver):
+                        detnet_model = detnet_model_compile(nn=fcn_detnet.fcn36_deconv_backbone(0.01),
+                                                            summary=True,
+                                                            det_loss_weight=det_weight,
+                                                            optimizer=optimizer,
+                                                            fkg_smooth_factor=fkg_weight,
+                                                            bkg_smooth_factor=bkg_weight)
+                        print('base detection is training')
+                        list_callback = callback_preparation(detnet_model, hyper)
+                        #list_callback.append(LearningRateScheduler(lr_scheduler))
+                        detnet_model.fit_generator(ori_shape_generator_with_heavy_aug(data[0],
+                                                                                      data[1],
+                                                                                      batch_size=BATCH_SIZE,
+                                                                                      aug_num=NUM_TO_AUG),
+                                                   epochs=EPOCHS,
+                                                   steps_per_epoch=TRAIN_STEP_PER_EPOCH,
+                                                   validation_data=ori_shape_generator_with_heavy_aug(
+                                                       data[2], data[3], batch_size=BATCH_SIZE,
+                                                       aug_num=NUM_TO_AUG),
+                                                   validation_steps=10,
+                                                   callbacks=list_callback)
+                        detnet_model.save_weights(model_weights_saver)
+
     for i, det_weight in enumerate(hyper_para[0]):
         if Config.model_loss == 'focal_double':
             print('------------------------------------')
