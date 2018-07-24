@@ -286,7 +286,7 @@ def _draw_points(dots, img, color, notation_type, radius = 3):
                 canvas.ellipse((x0, y0, x1, y1), fill=color)
 
 
-def _create_binary_masks_ellipse(mats, usage, notation_type, color = [1, 2, 3, 4]):
+def _create_binary_masks_ellipse(mats, usage, notation_type, color=[1, 2, 3, 4]):
     """
     create binary mask using loaded data
     :param mats: points, mat format

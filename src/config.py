@@ -21,8 +21,10 @@ class Config(object):
     parser.add_argument("--loss_backend", default='keras')
     parser.add_argument("--backbone", default='resnet50', type=str)
     parser.add_argument("--test_img", default=15, type=int)
+    parser.add_argument("--data", default='crop', type=str)
     args = parser.parse_args()
     backbone = args.backbone
+    data=args.data
     loss_backend = args.loss_backend
     summary = args.summary
     image_per_gpu = args.image_per_gpu

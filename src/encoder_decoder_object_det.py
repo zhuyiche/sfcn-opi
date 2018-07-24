@@ -25,6 +25,7 @@ if ROOT_DIR.endswith('src'):
     ROOT_DIR = os.path.dirname(ROOT_DIR)
 
 DATA_DIR = os.path.join(ROOT_DIR, 'CRCHistoPhenotypes_2016_04_28', 'cls_and_det')
+CROP_DATA_DIR = os.path.join(ROOT_DIR, 'crop_cls_and_det')
 TENSORBOARD_DIR = os.path.join(ROOT_DIR, 'tensorboard_logs')
 CHECKPOINT_DIR = os.path.join(ROOT_DIR, 'checkpoint')
 WEIGHTS_DIR = os.path.join(ROOT_DIR, 'model_weights')
@@ -876,12 +877,17 @@ def data_prepare(print_image_shape=False, print_input_shape=False):
     def reshape_mask(origin, cate, num_class):
         return cate.reshape((origin.shape[0], origin.shape[1], origin.shape[2], num_class))
 
-    train_imgs, train_det_masks, train_cls_masks = load_data(data_path=DATA_DIR, type='train',
-                                                             reshape_size=(512, 512))
-    valid_imgs, valid_det_masks, valid_cls_masks = load_data(data_path=DATA_DIR, type='validation',
-                                                             reshape_size=(512, 512))
-    test_imgs, test_det_masks, test_cls_masks = load_data(data_path=DATA_DIR, type='test',
-                                                          reshape_size=(512, 512))
+    if not Config.data == 'crop':
+        train_imgs, train_det_masks, train_cls_masks = load_data(data_path=DATA_DIR, type='train',
+                                                                 reshape_size=(512, 512))
+        valid_imgs, valid_det_masks, valid_cls_masks = load_data(data_path=DATA_DIR, type='validation',
+                                                                 reshape_size=(512, 512))
+        test_imgs, test_det_masks, test_cls_masks = load_data(data_path=DATA_DIR, type='test',
+                                                              reshape_size=(512, 512))
+    elif Config.data == 'crop':
+        train_imgs, train_det_masks, train_cls_masks = load_data(data_path=CROP_DATA_DIR, type='train')
+        valid_imgs, valid_det_masks, valid_cls_masks = load_data(data_path=CROP_DATA_DIR, type='validation')
+        test_imgs, test_det_masks, test_cls_masks = load_data(data_path=CROP_DATA_DIR, type='test')
 
     if print_image_shape:
         print('Image shape print below: ')
@@ -1018,8 +1024,8 @@ def tune_loss_weight():
     det_weight = [np.array([0.2, 0.8]),np.array([0.1, 0.9]), np.array([0.15, 0.85])]
     l2_weight = 0.001
 
-    fkg_smooth_factor = [0.5, 1, 2, 3, 4, 5]
-    bkg_smooth_factor = [0.5, 1, 2, 3, 4, 5]
+    fkg_smooth_factor = [0.5, 1, 2]
+    bkg_smooth_factor = [0.5, 1, 2]
     fkb_extend_smooth_factor = [0.6, 0.7, 0.9, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9,
                                 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.1, 3.2, 3.3,
                                 3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.1, 4.2, 4.3, 4.4, 4.5]
@@ -1067,7 +1073,7 @@ if __name__ == '__main__':
         parallel_model = keras.utils.multi_gpu_model(network, Config.gpu_count)
 
 
-    if Config.backbone == 'fcn36_fpn_predict':
+    if Config.backbone == 'fcn36_fpn_pred':
         fcn_detnet = Fcn_det()
         print('------------------------------------')
         print('This model is using {}'.format(Config.backbone))

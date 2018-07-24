@@ -16,7 +16,7 @@ from image_augmentation import ImageCropping
 from loss import detection_focal_loss_K, detection_loss_K, detection_double_focal_loss_K, detection_double_focal_loss_indicator_K
 from config import Config
 from tensorflow.python.client import device_lib
-from encoder_decoder_object_det import Conv3l2
+#from encoder_decoder_object_det import Conv3l2
 
 weight_decay = 0.005
 epsilon = 1e-7
@@ -31,6 +31,41 @@ CHECKPOINT_DIR = os.path.join(ROOT_DIR, 'checkpoint')
 WEIGHTS_DIR = os.path.join(ROOT_DIR, 'model_weights')
 
 
+class Conv3l2(keras.layers.Conv2D):
+    """
+    Custom convolution layer with default 3*3 kernel size and L2 regularization.
+    Default padding change to 'same' in this case.
+    """
+    def __init__(self, filters, kernel_regularizer_weight,
+                 strides=(1, 1),
+                 padding='same',
+                 data_format=None,
+                 dilation_rate=(1, 1),
+                 activation=None,
+                 use_bias=True,
+                 kernel_initializer='glorot_uniform',
+                 bias_initializer='zeros',
+                 bias_regularizer=None,
+                 activity_regularizer=None,
+                 kernel_constraint=None,
+                 bias_constraint=None,
+                 **kwargs):
+        super(self.__class__, self).__init__(filters,
+                                             kernel_size=(3, 3),
+                                             strides=strides,
+                                             padding=padding,
+                                             data_format=data_format,
+                                             dilation_rate=dilation_rate,
+                                             activation=activation,
+                                             use_bias=use_bias,
+                                             kernel_initializer=kernel_initializer,
+                                             bias_initializer=bias_initializer,
+                                             kernel_regularizer=l2(kernel_regularizer_weight),
+                                             bias_regularizer=bias_regularizer,
+                                             activity_regularizer=activity_regularizer,
+                                             kernel_constraint=kernel_constraint,
+                                             bias_constraint=bias_constraint,
+                                             **kwargs)
 ###########################################
 # ResNet Graph
 ###########################################
