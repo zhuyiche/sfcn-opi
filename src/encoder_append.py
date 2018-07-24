@@ -250,38 +250,38 @@ def fcn_36(inputs, l2_weight, stages=[2, 3, 4, 5],filters=[32, 64, 128, 256], tr
     x_id_47 = identity_block_2(f=filters[2], stage=stages[2], block=8, inputs=x_id_46, trainable=trainable, l2_weight=l2_weight)
     x_id_48 = identity_block_2(f=filters[2], stage=stages[2], block=9, inputs=x_id_47, trainable=trainable, l2_weight=l2_weight)
 
-    x_conv_5 = convolution_block_2(f=filters[3], stage=stages[2], block=1, inputs=x_id_48, trainable=trainable,
+    x_conv_5 = convolution_block_2(f=filters[3], stage=stages[3], block=1, inputs=x_id_48, trainable=trainable,
                                    l2_weight=l2_weight)
-    x_id_51 = identity_block_2(f=filters[3], stage=stages[2], block=2, inputs=x_conv_5, trainable=trainable,
+    x_id_51 = identity_block_2(f=filters[3], stage=stages[3], block=2, inputs=x_conv_5, trainable=trainable,
                                l2_weight=l2_weight)
-    x_id_52 = identity_block_2(f=filters[3], stage=stages[2], block=3, inputs=x_id_51, trainable=trainable,
+    x_id_52 = identity_block_2(f=filters[3], stage=stages[3], block=3, inputs=x_id_51, trainable=trainable,
                                l2_weight=l2_weight)
-    x_id_53 = identity_block_2(f=filters[3], stage=stages[2], block=4, inputs=x_id_52, trainable=trainable,
+    x_id_53 = identity_block_2(f=filters[3], stage=stages[3], block=4, inputs=x_id_52, trainable=trainable,
                                l2_weight=l2_weight)
-    x_id_54 = identity_block_2(f=filters[3], stage=stages[2], block=5, inputs=x_id_53, trainable=trainable,
+    x_id_54 = identity_block_2(f=filters[3], stage=stages[3], block=5, inputs=x_id_53, trainable=trainable,
                                l2_weight=l2_weight)
-    x_id_55 = identity_block_2(f=filters[3], stage=stages[2], block=6, inputs=x_id_54, trainable=trainable,
+    x_id_55 = identity_block_2(f=filters[3], stage=stages[3], block=6, inputs=x_id_54, trainable=trainable,
                                l2_weight=l2_weight)
-    x_id_56 = identity_block_2(f=filters[3], stage=stages[2], block=7, inputs=x_id_55, trainable=trainable,
+    x_id_56 = identity_block_2(f=filters[3], stage=stages[3], block=7, inputs=x_id_55, trainable=trainable,
                                l2_weight=l2_weight)
-    x_id_57 = identity_block_2(f=filters[3], stage=stages[2], block=8, inputs=x_id_56, trainable=trainable,
+    x_id_57 = identity_block_2(f=filters[3], stage=stages[3], block=8, inputs=x_id_56, trainable=trainable,
                                l2_weight=l2_weight)
-    x_id_58 = identity_block_2(f=filters[3], stage=stages[2], block=9, inputs=x_id_57, trainable=trainable,
+    x_id_58 = identity_block_2(f=filters[3], stage=stages[3], block=9, inputs=x_id_57, trainable=trainable,
                                l2_weight=l2_weight)
     return x_id_28, x_id_38, x_id_48, x_id_58
 
-def Fcn_det():
+class Fcn_det:
     def __init__(self, input_shape=(256, 256, 3)):
         # self.inputs = inputs
         self.input_shape = input_shape
         l2_weight = 0.001
 
-    def first_layer(self, inputs, trainable=True):
+    def first_layer(self, inputs, l2_weight, trainable=True):
         """
         First convolution layer.
         """
         x = Conv3l2(filters=32, name='Conv_1',
-                    kernel_regularizer_weight=self.l2_weight,
+                    kernel_regularizer_weight=l2_weight,
                     trainable=trainable)(inputs)
         x = BatchNormalization(name='BN_1',trainable=trainable)(x)
         x = Activation('relu', name='act_1',trainable=trainable)(x)
@@ -290,7 +290,7 @@ def Fcn_det():
     ####################################
     # FCN 36 as in paper sfcn-opi
     ####################################
-    def fcn36_deconv_backbone(self, l2_weight):
+    def fcn36_deconv_backbone(self, l2_weight=0.001):
         #######################################
         # Extra branch for every pyramid feature
         #######################################
@@ -303,31 +303,39 @@ def Fcn_det():
 
             def _32to256(input, type):
                 x_deconv64 = Conv2DTranspose(kernel_size=(3, 3),
-                                              filters=256, strides=(2, 2), name=type + '_deconv_64_Conv')(input)
+                                              filters=256, strides=(2, 2), name=type + '_deconv_64_Conv',
+                                             padding='same',
+                                             kernel_regularizer=l2(l2_weight))(input)
                 x_deconv64 = BatchNormalization(name=type + '_deconv_64_BN')(x_deconv64)
                 x_deconv64 = Activation('relu', name=type + '_deconv_64_RELU')(x_deconv64)
                 x_deconv128 = Conv2DTranspose(kernel_size=(3, 3),
-                                              filters=256, strides=(2, 2), name=type + '_deconv_128_Conv')(x_deconv64)
+                                              filters=256, strides=(2, 2), name=type + '_deconv_128_Conv',
+                                              padding='same',
+                                             kernel_regularizer=l2(l2_weight))(x_deconv64)
                 x_deconv128 = BatchNormalization(name=type + '_deconv_128_BN')(x_deconv128)
                 x_deconv128 = Activation('relu', name=type + '_deconv_128_RELU')(x_deconv128)
-                x_deconv256 = Conv2DTranspose(kernel_size=(3, 3),
-                                              filters=256, strides=(2, 2), name=type + '_deconv_256_Conv')(x_deconv128)
+                x_deconv256 = Conv2DTranspose(kernel_size=(3, 3), padding='same',
+                                              filters=256, strides=(2, 2), name=type + '_deconv_256_Conv',
+                                             kernel_regularizer=l2(l2_weight))(x_deconv128)
                 return x_deconv256
 
             # in detnet setting, C6.shape == C5.shape == C4.shape, in fcn27 this is 1/4 of origin image
             C7_deconv = _32to256(C7, 'C7')
             C6_deconv = _32to256(C6, 'C6')
             C5_deconv = _32to256(C5, 'C5')
-            C4_deconv_128 = Conv2DTranspose(kernel_size=(3, 3),
-                                            filters=128, strides=(2, 2), name='C4_deconv_128_Conv')(C4)
+            C4_deconv_128 = Conv2DTranspose(kernel_size=(3, 3), padding='same',
+                                            filters=128, strides=(2, 2), name='C4_deconv_128_Conv',
+                                             kernel_regularizer=l2(l2_weight))(C4)
             C4_deconv_128 = BatchNormalization(name='C4_deconv_128_BN')(C4_deconv_128)
             C4_deconv_128 = Activation('relu', name='C4_deconv_128_RELU')(C4_deconv_128)
-            C4_deconv_256 = Conv2DTranspose(kernel_size=(3, 3),
-                                            filters=128, strides=(2, 2), name='C4_deconv_256_Conv')(C4_deconv_128)
+            C4_deconv_256 = Conv2DTranspose(kernel_size=(3, 3), padding='same',
+                                            filters=128, strides=(2, 2), name='C4_deconv_256_Conv',
+                                             kernel_regularizer=l2(l2_weight))(C4_deconv_128)
 
 
-            C3_deconv_256 = Conv2DTranspose(kernel_size=(3, 3),
-                                            filters=64, strides=(2, 2), name='C3_deconv_256_Conv')(C3)
+            C3_deconv_256 = Conv2DTranspose(kernel_size=(3, 3), padding='same',
+                                            filters=64, strides=(2, 2), name='C3_deconv_256_Conv',
+                                             kernel_regularizer=l2(l2_weight))(C3)
 
             C23456_concat = Concatenate()([C7_deconv, C6_deconv, C5_deconv, C4_deconv_256, C3_deconv_256, C2])
 
@@ -338,7 +346,7 @@ def Fcn_det():
         #########
         # Adapted first stage
         #########
-        x_stage1 = self.first_layer(inputs=img_input)
+        x_stage1 = self.first_layer(inputs=img_input, l2_weight=l2_weight)
         x_stage2, x_stage3, x_stage4, x_stage5 = fcn_36(x_stage1, l2_weight=l2_weight)
         # stage3 is 1/2 size
         #########
@@ -355,7 +363,8 @@ def Fcn_det():
         # 1x1 convolutnion part
         ########
         x_stage2_1x1 = Conv2D(filters=32, kernel_size=(1, 1), padding='same',
-                              name='stage2_1x1_conv')(x_stage2)
+                              name='stage2_1x1_conv',
+                                             kernel_regularizer=l2(l2_weight))(x_stage2)
         x_stage3_1x1 = Conv2D(filters=64, kernel_size=(1, 1), padding='same',
                               name='stage3_1x1_conv',
                               kernel_regularizer=l2(l2_weight))(x_stage3)
@@ -372,8 +381,9 @@ def Fcn_det():
 
         stage_67 = Add(name='add_stage_6_7')([x_stage6_1x1, x_stage7_1x1])
         stage_567 = Add(name='add_stage_5_6_7')([x_stage5_1x1, stage_67])
-        stage_567_upsample = Conv2DTranspose(filters=128, kernel_size=(1, 1), strides=(2, 2),
-                                             name='stage_567_upsample')(stage_567)
+        stage_567_upsample = Conv2DTranspose(filters=128, kernel_size=(1, 1), strides=(2, 2),padding='same',
+                                             name='stage_567_upsample',
+                                             kernel_regularizer=l2(l2_weight))(stage_567)
         stage_4567 = Add(name='add_stage_4_567')([stage_567_upsample, x_stage4_1x1])
         stage_4567_upsample = Conv2DTranspose(filters=64, kernel_size=(3, 3), strides=(2, 2),
                                               padding='same',
@@ -382,12 +392,12 @@ def Fcn_det():
         stage_34567 = Add(name='add_stage_3_4567')([stage_4567_upsample, x_stage3_1x1])  # filters = 64
         stage_34567_upsample = Conv2DTranspose(filters=32, kernel_size=(3, 3), strides=(2, 2),
                                                padding='same', kernel_regularizer=l2(l2_weight),
-                                               name='stage_')(stage_34567)
-        stage_234567 = Add(name='add_stage_2_34567')([stage_4567_upsample, x_stage2_1x1])
+                                               name='stage_34567_upsample')(stage_34567)
+        stage_234567 = Add(name='add_stage_2_34567')([stage_34567_upsample, x_stage2_1x1])
 
         x_feature_concat= _feature_concat_deconv_branch(C7=x_stage7_1x1, C6=stage_67, C5=stage_567,
-                                                            C4=stage_4567, C3=stage_34567, C2=stage_234567)
-        x_feature_concat = Conv2D(kernel_size=(1,1), filters=2, kernel_regularizer=l2(l2_weight),
+                                                        C4=stage_4567, C3=stage_34567, C2=stage_234567)
+        x_feature_concat = Conv2D(kernel_size=(1,1), filters=2, kernel_regularizer=l2(l2_weight),padding='same',
                                   name='all_feature_concat')(x_feature_concat)
         x_output = Activation('softmax', name='Final_Softmax')(x_feature_concat)
         detnet_model = Model(inputs=img_input,
@@ -443,7 +453,7 @@ def Fcn_det():
         #########
         # Adapted first stage
         #########
-        x_stage1 = self.first_layer(inputs=img_input)
+        x_stage1 = self.first_layer(inputs=img_input, l2_weight=l2_weight)
         x_stage2, x_stage3, x_stage4 = fcn_27(x_stage1, l2_weight= l2_weight, stages=[2, 3, 4])
         # stage3 is 1/2 size
         #########
@@ -486,7 +496,7 @@ def Fcn_det():
         
         x_output_b4_softmax = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2),
                                               padding='same', kernel_regularizer=l2(l2_weight),
-                                              name='Deconv_b4_softmax_output')(stage_34)
+                                              name='Deconv_b4_softmax_output')(stage_23456)
         
         x_output = Activation('softmax', name='Final_Softmax')(x_output_b4_softmax)
         detnet_model = Model(inputs=img_input,

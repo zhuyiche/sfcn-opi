@@ -63,8 +63,17 @@ def batch_crop_image_parts(ori_set, target_set):
                            os.path.join(target_set, str(file)+'_2',str(file)+'_2_detection.bmp'),
                            os.path.join(target_set, str(file)+'_3',str(file)+'_3_detection.bmp'),
                            os.path.join(target_set, str(file)+'_4',str(file)+'_4_detection.bmp')]
+        backup_img_create = [os.path.join(target_set, str(file)+ '_1', str(file)+'_1_original.bmp'),
+                           os.path.join(target_set, str(file)+ '_2', str(file)+'_2_original.bmp'),
+                           os.path.join(target_set, str(file)+ '_3', str(file)+'_3_original.bmp'),
+                           os.path.join(target_set, str(file)+'_4', str(file)+'_4_original.bmp'),
+                           os.path.join(target_set, str(file)+'_1',str(file)+'_1_detection.bmp'),
+                           os.path.join(target_set, str(file)+'_2',str(file)+'_2_detection.bmp'),
+                           os.path.join(target_set, str(file)+'_3',str(file)+'_3_detection.bmp'),
+                           os.path.join(target_set, str(file)+'_4',str(file)+'_4_detection.bmp')]
         for order, img in enumerate(crop_list):
             check_cv2_imwrite(list_img_create[order], img)
+            check_cv2_imwrite(backup_img_create[order], img)
         #check_directory(list_file_create)
         #cv2.imwrite
 

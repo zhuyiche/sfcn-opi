@@ -10,6 +10,7 @@ from imgaug import augmenters as iaa
 import imgaug as ia
 from config import Config
 
+
 def _isArrayLike(obj):
     """
     check if this is array like object.
@@ -61,15 +62,16 @@ def set_num_step_and_aug():
     we set different augmentation number and training step depends on which struture we are using.
     :return:
     """
+    NUM_TO_AUG, TRAIN_STEP_PER_EPOCH = 0, 0
     if Config.backbone == 'resnet101':
         NUM_TO_AUG = 6
         TRAIN_STEP_PER_EPOCH = 32
     elif Config.backbone == 'resnet152':
         NUM_TO_AUG = 3
         TRAIN_STEP_PER_EPOCH = 50
-    elif Config.backbone == 'resnet50' or Config.backbone == 'fcn27':
-        NUM_TO_AUG = 5
-        TRAIN_STEP_PER_EPOCH = 40
+    elif Config.backbone == 'resnet50' or Config.backbone == 'fcn36_fpn_pred':
+        NUM_TO_AUG = 2
+        TRAIN_STEP_PER_EPOCH = 50
     elif Config.backbone == 'resnet50_encoder_shallow' or Config.backbone == 'resnet50_encoder_deep':
         NUM_TO_AUG = 3
         TRAIN_STEP_PER_EPOCH = 80
@@ -369,7 +371,7 @@ def img_test(i, type):
     contrast2.enhance(20).show(imgc)
 
 
-def load_data(data_path, type, reshape_size=None):
+def load_data(data_path, type, cls=False, reshape_size=None):
     path = os.path.join(data_path, type)  # cls_and_det/train
     imgs, det_masks, cls_masks = [], [], []
     for i, file in enumerate(os.listdir(path)):
@@ -389,12 +391,14 @@ def load_data(data_path, type, reshape_size=None):
                 if reshape_size is not None:
                     det_mask = cv2.resize(det_mask, reshape_size)
                 det_masks.append(det_mask)
+                """
             elif 'classification.bmp' in img_file:
-                cls_mask_path = os.path.join(path, file, img_file)
-                cls_mask = cv2.imread(cls_mask_path, 0)
-                if reshape_size != None:
-                    cls_mask = cv2.resize(cls_mask, reshape_size)
-                cls_masks.append(cls_mask)
+                if cls == True:
+                    cls_mask_path = os.path.join(path, file, img_file)
+                    cls_mask = cv2.imread(cls_mask_path, 0)
+                    if reshape_size != None:
+                        cls_mask = cv2.resize(cls_mask, reshape_size)
+                    cls_masks.append(cls_mask)"""
     return np.array(imgs), np.array(det_masks), np.array(cls_masks)
 
 
