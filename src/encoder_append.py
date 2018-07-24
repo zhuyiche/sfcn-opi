@@ -294,7 +294,7 @@ class Fcn_det:
         #######################################
         # Extra branch for every pyramid feature
         #######################################
-        def _feature_concat_deconv_branch(C7=None, C6=None, C5=None, C4=None, C3=None, C2=None):
+        def _feature_concat_deconv_branch(C7=None, C6=None, C5=None, C4=None, C3=None):
             """
 
             :param features: input feature is from every feature pyramid layer,
@@ -337,7 +337,7 @@ class Fcn_det:
                                             filters=64, strides=(2, 2), name='C3_deconv_256_Conv',
                                              kernel_regularizer=l2(l2_weight))(C3)
 
-            C23456_concat = Concatenate()([C7_deconv, C6_deconv, C5_deconv, C4_deconv_256, C3_deconv_256, C2])
+            C23456_concat = Concatenate()([C7_deconv, C6_deconv, C5_deconv, C4_deconv_256, C3_deconv_256])
 
             return C23456_concat
 
@@ -362,9 +362,7 @@ class Fcn_det:
         ########
         # 1x1 convolutnion part
         ########
-        x_stage2_1x1 = Conv2D(filters=32, kernel_size=(1, 1), padding='same',
-                              name='stage2_1x1_conv',
-                                             kernel_regularizer=l2(l2_weight))(x_stage2)
+        #x_stage2_1x1 = Conv2D(filters=32, kernel_size=(1, 1), padding='same', name='stage2_1x1_conv', kernel_regularizer=l2(l2_weight))(x_stage2)
         x_stage3_1x1 = Conv2D(filters=64, kernel_size=(1, 1), padding='same',
                               name='stage3_1x1_conv',
                               kernel_regularizer=l2(l2_weight))(x_stage3)
@@ -390,13 +388,11 @@ class Fcn_det:
                                               kernel_regularizer=keras.regularizers.l2(l2_weight),
                                               name='stage_4567_upsample')(stage_4567)
         stage_34567 = Add(name='add_stage_3_4567')([stage_4567_upsample, x_stage3_1x1])  # filters = 64
-        stage_34567_upsample = Conv2DTranspose(filters=32, kernel_size=(3, 3), strides=(2, 2),
-                                               padding='same', kernel_regularizer=l2(l2_weight),
-                                               name='stage_34567_upsample')(stage_34567)
-        stage_234567 = Add(name='add_stage_2_34567')([stage_34567_upsample, x_stage2_1x1])
+        #stage_34567_upsample = Conv2DTranspose(filters=32, kernel_size=(3, 3), strides=(2, 2), padding='same', kernel_regularizer=l2(l2_weight), name='stage_34567_upsample')(stage_34567)
+        #stage_234567 = Add(name='add_stage_2_34567')([stage_34567_upsample, x_stage2_1x1])
 
         x_feature_concat= _feature_concat_deconv_branch(C7=x_stage7_1x1, C6=stage_67, C5=stage_567,
-                                                        C4=stage_4567, C3=stage_34567, C2=stage_234567)
+                                                        C4=stage_4567, C3=stage_34567)
         x_feature_concat = Conv2D(kernel_size=(1,1), filters=2, kernel_regularizer=l2(l2_weight),padding='same',
                                   name='all_feature_concat')(x_feature_concat)
         x_output = Activation('softmax', name='Final_Softmax')(x_feature_concat)
@@ -407,7 +403,7 @@ class Fcn_det:
     ####################################
     # FCN 27 as in paper sfcn-opi
     ####################################
-    def fcn27_backbone(self, l2_weight):
+    def fcn27_backbone(self, l2_weight=0.001):
         #######################################
         # Extra branch for every pyramid feature
         #######################################
@@ -478,7 +474,7 @@ class Fcn_det:
                               name='stage5_1x1_conv', kernel_regularizer=l2(l2_weight))(x_stage5)
         x_stage6_1x1 = Conv2D(filters=128, kernel_size=(1, 1), padding='same',
                               name='stage6_1x1_conv', kernel_regularizer=l2(l2_weight))(x_stage6)
-        
+
         stage_456 = Add(name='add_stage4_5_6')([x_stage6_1x1, x_stage5_1x1, x_stage4_1x1])
         stage_456_upsample = Conv2DTranspose(filters=128, kernel_size=(1, 1), strides=(2, 2),
                                              name='stage456_upsample')(stage_456)
@@ -493,11 +489,11 @@ class Fcn_det:
                                               name='Deconv_b4_softmax_output')(stage_23456)
 
 
-        
+
         x_output_b4_softmax = Conv2DTranspose(filters=2, kernel_size=(3, 3), strides=(2, 2),
                                               padding='same', kernel_regularizer=l2(l2_weight),
                                               name='Deconv_b4_softmax_output')(stage_23456)
-        
+
         x_output = Activation('softmax', name='Final_Softmax')(x_output_b4_softmax)
         detnet_model = Model(inputs=img_input,
                              outputs=x_output)

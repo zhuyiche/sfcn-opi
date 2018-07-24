@@ -1079,10 +1079,7 @@ def save_model_weights(hyper):
 if __name__ == '__main__':
     set_gpu()
     hyper_para = tune_loss_weight()
-    if Config.data == 'crop':
-        BATCH_SIZE = 4 * Config.gpu_count
-    else:
-        BATCH_SIZE = Config.image_per_gpu * Config.gpu_count
+    BATCH_SIZE = Config.image_per_gpu * Config.gpu_count
     print('batch size is :', BATCH_SIZE)
     EPOCHS = Config.epoch
 
@@ -1093,12 +1090,14 @@ if __name__ == '__main__':
     optimizer = SGD(lr=0.01, decay=0.00001, momentum=0.9, nesterov=True)
 
     # multi gpu
-    list_gpu = [0, 2]
-    if Config.gpu_count > 1:
+    if Config.gpu_count > 1 and Config.backbone != 'fcn36_fpn_pred':
         parallel_model = keras.utils.multi_gpu_model(network, Config.gpu_count)
 
     if Config.backbone == 'fcn36_fpn_pred':
         fcn_detnet = Fcn_det()
+        if Config.gpu_count > 1:
+            parallel_model = keras.utils.multi_gpu_model(fcn_detnet, Config.gpu_count)
+            print('This session is using {}'.format(Config.gpu_count))
         print('------------------------------------')
         print('This model is using {}'.format(Config.backbone))
         print()

@@ -18,6 +18,29 @@ def _isArrayLike(obj):
     return hasattr(obj, '__iter__') and hasattr(obj, '__len__')
 
 
+def set_num_step_and_aug():
+    """
+    Because the size of image is big and it would store in computation graph for doing back propagation,
+    we set different augmentation number and training step depends on which struture we are using.
+    :return:
+    """
+    NUM_TO_AUG, TRAIN_STEP_PER_EPOCH = 0, 0
+    if Config.backbone == 'resnet101':
+        NUM_TO_AUG = 6
+        TRAIN_STEP_PER_EPOCH = 32
+    elif Config.backbone == 'resnet152':
+        NUM_TO_AUG = 3
+        TRAIN_STEP_PER_EPOCH = 50
+    elif Config.backbone == 'resnet50' or Config.backbone == 'fcn36_fpn_pred':
+        NUM_TO_AUG = 2
+        TRAIN_STEP_PER_EPOCH = 50
+    elif Config.backbone == 'resnet50_encoder_shallow' or Config.backbone == 'resnet50_encoder_deep':
+        NUM_TO_AUG = 3
+        TRAIN_STEP_PER_EPOCH = 80
+
+    return NUM_TO_AUG, TRAIN_STEP_PER_EPOCH
+
+
 def set_gpu():
     """
     Set gpu config if gpu is available
@@ -53,30 +76,6 @@ def lr_scheduler(epoch):
     if epoch == 250:
         lr = 0.000001
     return lr
-
-
-
-def set_num_step_and_aug():
-    """
-    Because the size of image is big and it would store in computation graph for doing back propagation,
-    we set different augmentation number and training step depends on which struture we are using.
-    :return:
-    """
-    NUM_TO_AUG, TRAIN_STEP_PER_EPOCH = 0, 0
-    if Config.backbone == 'resnet101':
-        NUM_TO_AUG = 6
-        TRAIN_STEP_PER_EPOCH = 32
-    elif Config.backbone == 'resnet152':
-        NUM_TO_AUG = 3
-        TRAIN_STEP_PER_EPOCH = 50
-    elif Config.backbone == 'resnet50' or Config.backbone == 'fcn36_fpn_pred':
-        NUM_TO_AUG = 2
-        TRAIN_STEP_PER_EPOCH = 50
-    elif Config.backbone == 'resnet50_encoder_shallow' or Config.backbone == 'resnet50_encoder_deep':
-        NUM_TO_AUG = 3
-        TRAIN_STEP_PER_EPOCH = 80
-
-    return NUM_TO_AUG, TRAIN_STEP_PER_EPOCH
 
 
 def aug_on_fly(img, det_mask, cls_mask):
