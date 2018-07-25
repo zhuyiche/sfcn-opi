@@ -67,7 +67,10 @@ def detection_loss_K(weight):
     """
     def _detection_loss(y_true, y_pred):
         y_pred = tf.clip_by_value(y_pred, epsilon, 1 - epsilon)
-        result = -K.mean(weight * y_true * K.log(y_pred) + (1-y_true) * K.log(1-y_pred))
+        y_pred = y_pred[:, :, :, 1]
+        y_true = y_true[:, :, :, 1]
+        result = -K.mean(weight[1] * y_true * K.log(y_pred) +
+                         weight[0] * (1-y_true) * K.log(1-y_pred))
         return result
     return _detection_loss
 

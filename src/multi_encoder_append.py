@@ -571,13 +571,10 @@ def set_fcn36_num_step_and_aug():
 
 
 if __name__ == '__main__':
-    if Config.gpu_count == 1:
-        os.environ["CUDA_VISIBLE_DEVICES"] = Config.gpu1
+    os.environ["CUDA_VISIBLE_DEVICES"] = Config.gpu1# + ', ' + Config.gpu2
     fcn_detnet = Fcn_det().fcn36_deconv_backbone()
-    """
     if Config.gpu_count > 1:
-
-        parallel_model = keras.utils.multi_gpu_model(fcn_detnet, [1, 2])
+        parallel_model = keras.utils.multi_gpu_model(fcn_detnet, [0, 1])
         print('This session is using {}'.format(Config.gpu_count))
         print('------------------------------------')
         print('This model is using {}'.format(Config.backbone))
@@ -594,10 +591,8 @@ if __name__ == '__main__':
         #################
         # without focal loss
         #################
-        hyper = '{}_loss:{}_det:{}_fkg:{}_bkg:{}_lr:0.01'.format(Config.backbone + '_multi', 'nm',
-                                                                 0.2,
-                                                                 fkg_weight,
-                                                                 bkg_weight)  # _l2:{}_bkg:{}'.format()
+        hyper = '{}_loss:{}_det:{}_lr:0.01'.format(Config.backbone + '_multi', 'nm',
+                                                                 0.2)  # _l2:{}_bkg:{}'.format()
         print(hyper)
         print()
         model_weights_saver = save_model_weights(hyper)
@@ -609,14 +604,14 @@ if __name__ == '__main__':
             print('multi-gpu fcn36 base detection is training')
             list_callback = multi_callback_preparation(parallel_model_1, hyper)
             # list_callback.append(LearningRateScheduler(lr_scheduler))
-            parallel_model_1.fit_generator(crop_shape_generator_with_heavy_aug(data[0],
-                                                                               data[1],
+            parallel_model_1.fit_generator(crop_shape_generator_with_heavy_aug(data[0].astype('float32'),
+                                                                               data[1].astype('float32'),
                                                                                batch_size=BATCH_SIZE,
                                                                                aug_num=NUM_TO_AUG),
                                            epochs=EPOCHS,
                                            steps_per_epoch=TRAIN_STEP_PER_EPOCH,
                                            validation_data=crop_shape_generator_with_heavy_aug(
-                                               data[2], data[3], batch_size=BATCH_SIZE,
+                                               data[2].astype('float32'), data[3].astype('float32'), batch_size=BATCH_SIZE,
                                                aug_num=NUM_TO_AUG),
                                            validation_steps=10,
                                            callbacks=list_callback)
@@ -656,80 +651,3 @@ if __name__ == '__main__':
                                                    validation_steps=10,
                                                    callbacks=list_callback)
                         fcn_detnet.save_weights(model_weights_saver)
-    """
-
-    print('------------------------------------')
-    print('This model is using {}'.format(Config.backbone))
-    print()
-    hyper_para = fcn_tune_loss_weight()
-    BATCH_SIZE = Config.image_per_gpu * Config.gpu_count
-    print('batch size is :', BATCH_SIZE)
-    EPOCHS = Config.epoch
-
-    NUM_TO_AUG, TRAIN_STEP_PER_EPOCH = set_fcn36_num_step_and_aug()
-    # NUM_TO_CROP, NUM_TO_AUG = 20, 10
-    data = data_prepare(print_input_shape=True, print_image_shape=True)
-    optimizer = SGD(lr=0.01, decay=0.00001, momentum=0.9, nesterov=True)
-    #################
-    # without focal loss
-    #################
-    hyper = '{}_loss:{}_det:{}_lr:0.01'.format(Config.backbone, 'nm',
-                                               '0.2')  # _l2:{}_bkg:{}'.format()
-    print(hyper)
-    print()
-    model_weights_saver = save_model_weights(hyper)
-    if not os.path.exists(model_weights_saver):
-        fcn_detnet_model = fcn_detnet_normal_model_compile(nn=fcn_detnet,
-                                                           summary=True,
-                                                           det_loss_weight=np.array([0.2, 0.8]),
-                                                           optimizer=optimizer)
-        print('single gpu fcn36 base detection is training')
-        list_callback = callback_preparation(fcn_detnet_model, hyper)
-        # list_callback.append(LearningRateScheduler(lr_scheduler))
-        fcn_detnet_model.fit_generator(crop_shape_generator_with_heavy_aug(data[0],
-                                                                           data[1],
-                                                                           batch_size=BATCH_SIZE,
-                                                                           aug_num=NUM_TO_AUG),
-                                       epochs=EPOCHS,
-                                       steps_per_epoch=TRAIN_STEP_PER_EPOCH,
-                                       validation_data=crop_shape_generator_with_heavy_aug(
-                                           data[2], data[3], batch_size=BATCH_SIZE,
-                                           aug_num=NUM_TO_AUG),
-                                       validation_steps=10,
-                                       callbacks=list_callback)
-        fcn_detnet_model.save_weights(model_weights_saver)
-    ########################
-    # with focal loss
-    ########################
-    for i, det_weight in enumerate(hyper_para[0]):
-        for j, fkg_weight in enumerate(hyper_para[1]):
-            for k, bkg_weight in enumerate(hyper_para[3]):
-                hyper = '{}_loss:{}_det:{}_fkg:{}_bkg:{}_lr:0.01'.format(Config.backbone, 'fd',
-                                                                         det_weight[0],
-                                                                         fkg_weight,
-                                                                         bkg_weight)  # _l2:{}_bkg:{}'.format()
-                print(hyper)
-                print()
-                model_weights_saver = save_model_weights(hyper)
-                if not os.path.exists(model_weights_saver):
-                    fcn_detnet_model = fcn_detnet_focal_model_compile(nn=fcn_detnet,
-                                                        summary=True,
-                                                        det_loss_weight=det_weight,
-                                                        optimizer=optimizer,
-                                                        fkg_smooth_factor=fkg_weight,
-                                                        bkg_smooth_factor=bkg_weight)
-                    print('single gpu fcn36 focal detection is training')
-                    list_callback = callback_preparation(fcn_detnet_model, hyper)
-                    #list_callback.append(LearningRateScheduler(lr_scheduler))
-                    fcn_detnet_model.fit_generator(crop_shape_generator_with_heavy_aug(data[0],
-                                                                                  data[1],
-                                                                                  batch_size=BATCH_SIZE,
-                                                                                  aug_num=NUM_TO_AUG),
-                                               epochs=EPOCHS,
-                                               steps_per_epoch=TRAIN_STEP_PER_EPOCH,
-                                               validation_data=crop_shape_generator_with_heavy_aug(
-                                                   data[2], data[3], batch_size=BATCH_SIZE,
-                                                   aug_num=NUM_TO_AUG),
-                                               validation_steps=10,
-                                               callbacks=list_callback)
-                    fcn_detnet_model.save_weights(model_weights_saver)

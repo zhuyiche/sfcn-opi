@@ -133,12 +133,12 @@ def eval_weights_testset(weightsdir):
 
 if __name__ == '__main__':
     import time
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(Config.gpu)
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(Config.gpu1)
     #eval_weights_testset(WEIGHT_DIR)
     start = time.time()
-    weight_path = 'focal_double_resnet50_encoder_deep_loss:focal_double_det:0.2_fkg:0.5_bkg:0.5_lr:0.01_train.h5'
+    weight_path = 'focal_double_resnet50_loss:focal_double_det:0.2_fkg:2_bkg:3_lr:0.01_train.h5'
     imgdir = 'img' + str(2)
-    model = Detnet().detnet_resnet50_encoder_deep_backbone()
+    model = Detnet().detnet_resnet50_backbone()
     model.load_weights(os.path.join(WEIGHT_DIR, weight_path))
     prob_threshhold = [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
     eval_single_img(model, imgdir)

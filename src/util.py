@@ -2,15 +2,13 @@ import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
 import numpy as np
 np.set_printoptions(threshold=np.inf)
-import tensorflow as tf
 import os, cv2, shutil
-from skimage import io
-import scipy.misc as misc
 from scipy.io import loadmat
 from PIL import Image, ImageDraw
 from glob import glob
-import re
-import skimage
+from imgaug import augmenters as iaa
+import imgaug as ia
+from config import Config
 
 
 def _isArrayLike(obj):
@@ -18,6 +16,148 @@ def _isArrayLike(obj):
     check if this is array like object.
     """
     return hasattr(obj, '__iter__') and hasattr(obj, '__len__')
+
+
+def set_num_step_and_aug():
+    """
+    Because the size of image is big and it would store in computation graph for doing back propagation,
+    we set different augmentation number and training step depends on which struture we are using.
+    :return:
+    """
+    NUM_TO_AUG, TRAIN_STEP_PER_EPOCH = 0, 0
+    if Config.backbone == 'resnet101':
+        NUM_TO_AUG = 6
+        TRAIN_STEP_PER_EPOCH = 32
+    elif Config.backbone == 'resnet152':
+        NUM_TO_AUG = 3
+        TRAIN_STEP_PER_EPOCH = 50
+    elif Config.backbone == 'resnet50' or Config.backbone == 'fcn36_fpn':
+        NUM_TO_AUG = 2
+        TRAIN_STEP_PER_EPOCH = 50
+    elif Config.backbone == 'resnet50_encoder_shallow' or Config.backbone == 'resnet50_encoder_deep':
+        NUM_TO_AUG = 3
+        TRAIN_STEP_PER_EPOCH = 80
+
+    return NUM_TO_AUG, TRAIN_STEP_PER_EPOCH
+
+
+def set_gpu():
+    """
+    Set gpu config if gpu is available
+    """
+    if Config.gpu_count == 1:
+        os.environ["CUDA_VISIBLE_DEVICES"] = Config.gpu1
+    elif Config.gpu_count == 2:
+        os.environ["CUDA_VISIBLE_DEVICES"] = Config.gpu1 + ', ' + Config.gpu2
+    elif Config.gpu_count == 3:
+        os.environ["CUDA_VISIBLE_DEVICES"] = Config.gpu1 + ', ' + Config.gpu2 + ', ' + Config.gpu3
+    elif Config.gpu_count == 4:
+        os.environ["CUDA_VISIBLE_DEVICES"] = Config.gpu1 + ', ' + Config.gpu2 + ', ' + Config.gpu3 + ', ' + Config.gpu4
+
+
+def lr_scheduler(epoch):
+    """
+    use this for learning rate during training
+    :param epoch:
+    :return:
+    """
+    lr = 0.01
+    if epoch < 100 and epoch != 0:
+        lr = lr - 0.0001
+    if epoch % 10 == 0:
+        print('Current learning rate is :{}'.format(lr))
+    if epoch == 100:
+        lr = 0.001
+        print('Learning rate is modified after 100 epoch {}'.format(lr))
+    if epoch == 150:
+        lr = 0.0001
+    if epoch == 200:
+        lr = 0.00001
+    if epoch == 250:
+        lr = 0.000001
+    return lr
+
+
+def aug_on_fly(img, det_mask, cls_mask):
+    """Do augmentation with different combination on each training batch
+    """
+    def image_basic_augmentation(image, masks, ratio_operations=0.9):
+        # without additional operations
+        # according to the paper, operations such as shearing, fliping horizontal/vertical,
+        # rotating, zooming and channel shifting will be apply
+        sometimes = lambda aug: iaa.Sometimes(ratio_operations, aug)
+        hor_flip_angle = np.random.uniform(0, 1)
+        ver_flip_angle = np.random.uniform(0, 1)
+        seq = iaa.Sequential([
+            sometimes(
+                iaa.SomeOf((0, 5), [
+                iaa.Fliplr(hor_flip_angle),
+                iaa.Flipud(ver_flip_angle),
+                iaa.Affine(shear=(-16, 16)),
+                iaa.Affine(scale={'x': (1, 1.6), 'y': (1, 1.6)}),
+                iaa.PerspectiveTransform(scale=(0.01, 0.1))
+            ]))
+        ])
+        det_mask, cls_mask = masks[0], masks[1]
+        seq_to_deterministic = seq.to_deterministic()
+        aug_img = seq_to_deterministic.augment_images(image)
+        aug_det_mask = seq_to_deterministic.augment_images(det_mask)
+        aug_cls_mask = seq_to_deterministic.augment_images(cls_mask)
+        return aug_img, aug_det_mask, aug_cls_mask
+
+    aug_image, aug_det_mask, aug_cls_mask = image_basic_augmentation(image=img, masks=[det_mask, cls_mask])
+    return aug_image, aug_det_mask, aug_cls_mask
+
+def heavy_aug_on_fly(img, det_mask):
+    """Do augmentation with different combination on each training batch
+    """
+
+    def image_heavy_augmentation(image, det_masks, ratio_operations=0.6):
+        # according to the paper, operations such as shearing, fliping horizontal/vertical,
+        # rotating, zooming and channel shifting will be apply
+        sometimes = lambda aug: iaa.Sometimes(ratio_operations, aug)
+        edge_detect_sometime = lambda aug: iaa.Sometimes(0.1, aug)
+        elasitic_sometime = lambda aug:iaa.Sometimes(0.2, aug)
+        add_gauss_noise = lambda aug: iaa.Sometimes(0.15, aug)
+        hor_flip_angle = np.random.uniform(0, 1)
+        ver_flip_angle = np.random.uniform(0, 1)
+        seq = iaa.Sequential([
+            iaa.SomeOf((0, 5), [
+                iaa.Fliplr(hor_flip_angle),
+                iaa.Flipud(ver_flip_angle),
+                iaa.Affine(shear=(-16, 16)),
+                iaa.Affine(scale={'x': (1, 1.6), 'y': (1, 1.6)}),
+                iaa.PerspectiveTransform(scale=(0.01, 0.1)),
+
+                # These are additional augmentation.
+                #iaa.ContrastNormalization((0.75, 1.5))
+
+            ])])
+            #elasitic_sometime(
+             #   iaa.ElasticTransformation(alpha=(0.5, 3.5), sigma=0.25), random_order=True])
+        """
+                    edge_detect_sometime(iaa.OneOf([
+                        iaa.EdgeDetect(alpha=(0, 0.7)),
+                        iaa.DirectedEdgeDetect(alpha=(0,0.7), direction=(0.0, 1.0)
+                                               )
+                    ])),
+                    add_gauss_noise(iaa.AdditiveGaussianNoise(loc=0,
+                                                              scale=(0.0, 0.05*255),
+                                                              per_channel=0.5)
+                                    ),
+                    iaa.Sometimes(0.3,
+                                  iaa.GaussianBlur(sigma=(0, 0.5))
+                                  ),
+                    elasitic_sometime(
+                        iaa.ElasticTransformation(alpha=(0.5, 3.5), sigma=0.25)
+                    """
+        seq_to_deterministic = seq.to_deterministic()
+        aug_img = seq_to_deterministic.augment_images(image)
+        aug_det_mask = seq_to_deterministic.augment_images(det_masks)
+        return aug_img, aug_det_mask
+
+    aug_image, aug_det_mask = image_heavy_augmentation(image=img, det_masks=det_mask)
+    return aug_image, aug_det_mask
 
 
 def train_test_split(data_path, notation_type, new_folder = 'cls_and_det', 
@@ -147,7 +287,7 @@ def _draw_points(dots, img, color, notation_type, radius = 3):
                 canvas.ellipse((x0, y0, x1, y1), fill=color)
 
 
-def _create_binary_masks_ellipse(mats, usage, notation_type, color = [1, 2, 3, 4]):
+def _create_binary_masks_ellipse(mats, usage, notation_type, color=[1, 2, 3, 4]):
     """
     create binary mask using loaded data
     :param mats: points, mat format
@@ -230,7 +370,7 @@ def img_test(i, type):
     contrast2.enhance(20).show(imgc)
 
 
-def load_data(data_path, type, reshape_size=None):
+def load_data(data_path, type, cls=False, reshape_size=None):
     path = os.path.join(data_path, type)  # cls_and_det/train
     imgs, det_masks, cls_masks = [], [], []
     for i, file in enumerate(os.listdir(path)):
@@ -250,12 +390,14 @@ def load_data(data_path, type, reshape_size=None):
                 if reshape_size is not None:
                     det_mask = cv2.resize(det_mask, reshape_size)
                 det_masks.append(det_mask)
+                """
             elif 'classification.bmp' in img_file:
-                cls_mask_path = os.path.join(path, file, img_file)
-                cls_mask = cv2.imread(cls_mask_path, 0)
-                if reshape_size != None:
-                    cls_mask = cv2.resize(cls_mask, reshape_size)
-                cls_masks.append(cls_mask)
+                if cls == True:
+                    cls_mask_path = os.path.join(path, file, img_file)
+                    cls_mask = cv2.imread(cls_mask_path, 0)
+                    if reshape_size != None:
+                        cls_mask = cv2.resize(cls_mask, reshape_size)
+                    cls_masks.append(cls_mask)"""
     return np.array(imgs), np.array(det_masks), np.array(cls_masks)
 
 
