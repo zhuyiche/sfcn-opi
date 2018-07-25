@@ -566,15 +566,16 @@ def set_fcn36_num_step_and_aug():
     we set different augmentation number and training step depends on which struture we are using.
     :return:
     """
-    NUM_TO_AUG,TRAIN_STEP_PER_EPOCH = 2, 300
+    NUM_TO_AUG,TRAIN_STEP_PER_EPOCH = 2, 110
     return NUM_TO_AUG, TRAIN_STEP_PER_EPOCH
 
 
 if __name__ == '__main__':
+    from parallel_model import ParallelModel
     os.environ["CUDA_VISIBLE_DEVICES"] = Config.gpu1# + ', ' + Config.gpu2
     fcn_detnet = Fcn_det().fcn36_deconv_backbone()
     if Config.gpu_count > 1:
-        parallel_model = keras.utils.multi_gpu_model(fcn_detnet, [0, 1])
+        parallel_model = ParallelModel(fcn_detnet, 3)
         print('This session is using {}'.format(Config.gpu_count))
         print('------------------------------------')
         print('This model is using {}'.format(Config.backbone))
@@ -591,8 +592,7 @@ if __name__ == '__main__':
         #################
         # without focal loss
         #################
-        hyper = '{}_loss:{}_det:{}_lr:0.01'.format(Config.backbone + '_multi', 'nm',
-                                                                 0.2)  # _l2:{}_bkg:{}'.format()
+        hyper = '{}_loss:{}_det:{}_lr:0.01'.format(Config.backbone + '_multi', 'nm', 0.2)  # _l2:{}_bkg:{}'.format()
         print(hyper)
         print()
         model_weights_saver = save_model_weights(hyper)
@@ -603,7 +603,7 @@ if __name__ == '__main__':
                                                               optimizer=optimizer)
             print('multi-gpu fcn36 base detection is training')
             list_callback = multi_callback_preparation(parallel_model_1, hyper)
-            # list_callback.append(LearningRateScheduler(lr_scheduler))
+            list_callback.append(LearningRateScheduler(lr_scheduler))
             parallel_model_1.fit_generator(crop_shape_generator_with_heavy_aug(data[0].astype('float32'),
                                                                                data[1].astype('float32'),
                                                                                batch_size=BATCH_SIZE,
@@ -616,6 +616,7 @@ if __name__ == '__main__':
                                            validation_steps=10,
                                            callbacks=list_callback)
             fcn_detnet.save_weights(model_weights_saver)
+            parallel_model_1.save_weights(model_weights_saver)
         ####################
         # with focal loss
         ####################
@@ -638,7 +639,7 @@ if __name__ == '__main__':
                                                             bkg_smooth_factor=bkg_weight)
                         print('multi-gpu fcn36 focal detection is training')
                         list_callback = multi_callback_preparation(parallel_model_2, hyper)
-                        #list_callback.append(LearningRateScheduler(lr_scheduler))
+                        list_callback.append(LearningRateScheduler(lr_scheduler))
                         parallel_model_2.fit_generator(crop_shape_generator_with_heavy_aug(data[0],
                                                                                       data[1],
                                                                                       batch_size=BATCH_SIZE,
@@ -651,3 +652,4 @@ if __name__ == '__main__':
                                                    validation_steps=10,
                                                    callbacks=list_callback)
                         fcn_detnet.save_weights(model_weights_saver)
+                        parallel_model_2.save_weights(model_weights_saver)

@@ -472,7 +472,10 @@ def mask_to_corrdinates(mask):
 
 
 if __name__ == '__main__':
-
+    import keras.backend as K
+    import tensorflow as tf
+    print(K.get_session().list_devices())
+'''
     p = '/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28'
     from PIL import Image, ImageEnhance
     load_mask = Image.open('/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28/cls_and_det/train/img1/img1_detection.bmp')
@@ -483,7 +486,7 @@ if __name__ == '__main__':
     mat = loadmat('/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28/cls_and_det/train/img1/img1_detection.mat')['detection']
     print(np.sort(mat, axis=-1))
 
-    '''
+    
     p = '/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28'
     print(os.path.abspath('CRCHistoPhenotypes_2016_04_28'))
     #_reorder_image_files('/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28/cls_and_det')
