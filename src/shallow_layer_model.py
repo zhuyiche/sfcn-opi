@@ -383,7 +383,7 @@ def crop_on_fly(img, det_mask, cls_mask, crop_size):
     return cropped_img, cropped_det_mask, cropped_cls_mask
 
 
-def aug_on_fly(img, det_mask, cls_mask, ):
+def aug_on_fly(img, det_mask, cls_mask):
     """Do augmentation with different combination on each training batch
     """
     def image_basic_augmentation(image, masks, ratio_operations=0.9):
