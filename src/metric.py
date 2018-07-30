@@ -1,6 +1,13 @@
 import numpy as np
+import matplotlib.pyplot as plt
+import scipy.misc as misc
+import os
+import cv2
+import scipy.io as sio
 
-def non_max_suppression(img, overlap_thresh=0.1, max_boxes=2000, r=2, prob_thresh=0.10):
+epsilon = 1e-7
+
+def non_max_suppression(img, overlap_thresh=0.1, max_boxes=1200, r=5, prob_thresh=0.85):
     x1s = []
     y1s = []
     x2s = []
@@ -8,8 +15,8 @@ def non_max_suppression(img, overlap_thresh=0.1, max_boxes=2000, r=2, prob_thres
     probs = []
     for i in range(img.shape[0]):
         for j in range(img.shape[1]):
-            if img[i,j] < prob_thresh:
-                img[i,j] = 0
+            if img[i, j] < prob_thresh:
+                img[i, j] = 0
             else:
                 x1 = max(j - r, 0)
                 y1 = max(i - r, 0)
@@ -19,14 +26,15 @@ def non_max_suppression(img, overlap_thresh=0.1, max_boxes=2000, r=2, prob_thres
                 y1s.append(y1)
                 x2s.append(x2)
                 y2s.append(y2)
-                probs.append(img[i,j])
+                probs.append(img[i, j])
     x1s = np.array(x1s)
     y1s = np.array(y1s)
     x2s = np.array(x2s)
     y2s = np.array(y2s)
-    #print(x1s.shape)
-    boxes = np.concatenate((x1s.reshape((x1s.shape[0],1)), y1s.reshape((y1s.shape[0],1)), x2s.reshape((x2s.shape[0],1)), y2s.reshape((y2s.shape[0],1))),axis=1)
-    #print(boxes.shape)
+    # print(x1s.shape)
+    boxes = np.concatenate((x1s.reshape((x1s.shape[0], 1)), y1s.reshape((y1s.shape[0], 1)),
+                            x2s.reshape((x2s.shape[0], 1)), y2s.reshape((y2s.shape[0], 1))), axis=1)
+    # print(boxes.shape)
     probs = np.array(probs)
     pick = []
     area = (x2s - x1s) * (y2s - y1s)
@@ -58,11 +66,12 @@ def non_max_suppression(img, overlap_thresh=0.1, max_boxes=2000, r=2, prob_thres
             break
             # return only the bounding boxes that were picked using the integer data type
     boxes = boxes[pick]
-    #print(boxes.shape)
+    # print(boxes.shape)
 
     return boxes
 
-def get_metrics(gt, pred, r=3, print_single_result=True):
+
+def get_metrics(gt, pred, r=3):
     # calculate precise, recall and f1 score
     gt = np.array(gt).astype('int')
     if pred == []:
@@ -70,7 +79,6 @@ def get_metrics(gt, pred, r=3, print_single_result=True):
             return 1, 1, 1, 0
         else:
             return 0, 0, 0, 0
-
 
     pred = np.array(pred).astype('int')
 
@@ -84,11 +92,11 @@ def get_metrics(gt, pred, r=3, print_single_result=True):
         for i in range(gt.shape[0]):
             x = gt[i, 0]
             y = gt[i, 1]
-            x1 = max(0, x-r)
-            y1 = max(0, y-r)
-            x2 = min(x_max, x+r)
-            y2 = min(y_max, y+r)
-            gt_map[y1:y2,x1:x2] = 1
+            x1 = max(0, x - r)
+            y1 = max(0, y - r)
+            x2 = min(x_max, x + r)
+            y2 = min(y_max, y + r)
+            gt_map[y1:y2, x1:x2] = 1
 
         pred_map = np.zeros((y_max, x_max), dtype='int')
         for i in range(pred.shape[0]):
@@ -99,9 +107,8 @@ def get_metrics(gt, pred, r=3, print_single_result=True):
         result_map = gt_map * pred_map
         tp = result_map.sum()
 
-        precision = tp / (pred.shape[0] + 1e-7)
-        recall = tp / (gt.shape[0] + 1e-7)
-        f1_score = 2 * (precision * recall / (precision + recall + 1e-7))
-        if print_single_result:
-            print('P: {}, R: {}, F1: {}, true_positive: {}'.format(precision, recall, f1_score, tp))
+        precision = tp / (pred.shape[0] + epsilon)
+        recall = tp / (gt.shape[0] + epsilon)
+        f1_score = 2 * (precision * recall / (precision + recall + epsilon))
+
         return precision, recall, f1_score, tp

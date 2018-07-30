@@ -16,7 +16,7 @@ from image_augmentation import ImageCropping
 from loss import detection_focal_loss_K, detection_loss_K, detection_double_focal_loss_K, detection_double_focal_loss_indicator_K
 from config import Config
 from tensorflow.python.client import device_lib
-from encoder_append import *
+#from encoder_append import
 weight_decay = 0.005
 epsilon = 1e-7
 
@@ -912,7 +912,7 @@ def data_prepare(print_image_shape=False, print_input_shape=False):
         print('valid_imgs: {}, valid_det: {}'.format(valid_imgs.shape, valid_det.shape))
         print('test_imgs: {}, test_det: {}'.format(test_imgs.shape, test_det.shape))
         print()
-    return [train_imgs, train_det,valid_imgs, valid_det,  test_imgs, test_det,]
+    return [train_imgs, train_det,valid_imgs, valid_det,  test_imgs, test_det]
 
 
 def ori_shape_generator_with_heavy_aug(features, det_labels, batch_size,

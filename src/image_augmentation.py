@@ -20,7 +20,7 @@ TEST_TARGET_DATA_DIR = os.path.join(TARGET_DATA_DIR, 'test')
 VALID_TARGET_DATA_DIR = os.path.join(TARGET_DATA_DIR, 'validation')
 
 
-def crop_image_parts(image, det_mask, origin_shape=(512, 512)):
+def crop_image_parts(image, det_mask, cls_mask, origin_shape=(512, 512)):
     assert image.ndim == 3
     ori_width, ori_height = origin_shape[0], origin_shape[1]
     des_width, des_height = 256, 256
@@ -31,24 +31,35 @@ def crop_image_parts(image, det_mask, origin_shape=(512, 512)):
     cropped_img3 = image[0: des_width, des_height: ori_height, :]
     cropped_img4 = image[des_width: ori_width, des_height: ori_height, :]
 
-    cropped_mask1 = det_mask[0: des_width, 0: des_height, :]              # 1, 3
-    cropped_mask2 = det_mask[des_width: ori_width, 0: des_height, :]      # 2, 4
-    cropped_mask3 = det_mask[0: des_width, des_height: ori_height, :]
-    cropped_mask4 = det_mask[des_width: ori_width, des_height: ori_height, :]
+    cropped_det_mask1 = det_mask[0: des_width, 0: des_height, :]              # 1, 3
+    cropped_det_mask2 = det_mask[des_width: ori_width, 0: des_height, :]      # 2, 4
+    cropped_det_mask3 = det_mask[0: des_width, des_height: ori_height, :]
+    cropped_det_mask4 = det_mask[des_width: ori_width, des_height: ori_height, :]
+
+    cropped_cls_mask1 = cls_mask[0: des_width, 0: des_height, :]  # 1, 3
+    cropped_cls_mask2 = cls_mask[des_width: ori_width, 0: des_height, :]  # 2, 4
+    cropped_cls_mask3 = cls_mask[0: des_width, des_height: ori_height, :]
+    cropped_cls_mask4 = cls_mask[des_width: ori_width, des_height: ori_height, :]
+
     return [cropped_img1, cropped_img2, cropped_img3, cropped_img4,
-            cropped_mask1, cropped_mask2, cropped_mask3, cropped_mask4]
+            cropped_det_mask1, cropped_det_mask2, cropped_det_mask3, cropped_det_mask4,
+            cropped_cls_mask1, cropped_cls_mask2, cropped_cls_mask3, cropped_cls_mask4,
+            cropped_img1, cropped_img2, cropped_img3, cropped_img4]
 
 
 def batch_crop_image_parts(ori_set, target_set):
     for file in os.listdir(ori_set):
         print(file)
         image_file = os.path.join(ori_set, str(file), str(file) + '.bmp')
-        mask_file = os.path.join(ori_set, str(file), str(file) + '_detection.bmp')
+        det_mask_file = os.path.join(ori_set, str(file), str(file) + '_detection.bmp')
+        cls_mask_file = os.path.join(ori_set, str(file), str(file) + '_classification.bmp')
         image = cv2.imread(image_file)
         image = cv2.resize(image, (512, 512))
-        det_mask = cv2.imread(mask_file)
+        det_mask = cv2.imread(det_mask_file)
         det_mask = cv2.resize(det_mask, (512, 512))
-        crop_list = crop_image_parts(image, det_mask)
+        cls_mask = cv2.imread(cls_mask_file)
+        cls_mask = cv2.resize(cls_mask, (512, 512))
+        crop_list = crop_image_parts(image, det_mask, cls_mask)
 
         list_file_create = [os.path.join(target_set, str(file)+'_1'),
                             os.path.join(target_set, str(file)+'_2'),
@@ -62,18 +73,18 @@ def batch_crop_image_parts(ori_set, target_set):
                            os.path.join(target_set, str(file)+'_1',str(file)+'_1_detection.bmp'),
                            os.path.join(target_set, str(file)+'_2',str(file)+'_2_detection.bmp'),
                            os.path.join(target_set, str(file)+'_3',str(file)+'_3_detection.bmp'),
-                           os.path.join(target_set, str(file)+'_4',str(file)+'_4_detection.bmp')]
-        backup_img_create = [os.path.join(target_set, str(file)+ '_1', str(file)+'_1_original.bmp'),
-                           os.path.join(target_set, str(file)+ '_2', str(file)+'_2_original.bmp'),
-                           os.path.join(target_set, str(file)+ '_3', str(file)+'_3_original.bmp'),
-                           os.path.join(target_set, str(file)+'_4', str(file)+'_4_original.bmp'),
-                           os.path.join(target_set, str(file)+'_1',str(file)+'_1_detection.bmp'),
-                           os.path.join(target_set, str(file)+'_2',str(file)+'_2_detection.bmp'),
-                           os.path.join(target_set, str(file)+'_3',str(file)+'_3_detection.bmp'),
-                           os.path.join(target_set, str(file)+'_4',str(file)+'_4_detection.bmp')]
+                           os.path.join(target_set, str(file)+'_4',str(file)+'_4_detection.bmp'),
+                           os.path.join(target_set, str(file) + '_1', str(file) + '_1_classification.bmp'),
+                           os.path.join(target_set, str(file) + '_2', str(file) + '_2_classification.bmp'),
+                           os.path.join(target_set, str(file) + '_3', str(file) + '_3_classification.bmp'),
+                           os.path.join(target_set, str(file) + '_4', str(file) + '_4_classification.bmp'),
+                           os.path.join(target_set, str(file) + '_1', str(file) + '_1_original.bmp'),
+                           os.path.join(target_set, str(file) + '_2', str(file) + '_2_original.bmp'),
+                           os.path.join(target_set, str(file) + '_3', str(file) + '_3_original.bmp'),
+                           os.path.join(target_set, str(file) + '_4', str(file) + '_4_original.bmp')]
+
         for order, img in enumerate(crop_list):
             check_cv2_imwrite(list_img_create[order], img)
-            check_cv2_imwrite(backup_img_create[order], img)
         #check_directory(list_file_create)
         #cv2.imwrite
 

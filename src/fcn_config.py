@@ -1,7 +1,7 @@
 import argparse
 
 
-class Config(object):
+class Config_fcn(object):
     """
     Manually setting configuration.
     """

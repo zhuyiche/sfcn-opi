@@ -14,7 +14,7 @@ from util import load_data, set_gpu, set_num_step_and_aug, lr_scheduler, aug_on_
 import os, time
 from image_augmentation import ImageCropping
 from loss import detection_focal_loss_K, detection_loss_K, detection_double_focal_loss_K, detection_double_focal_loss_indicator_K
-from fcn_config import Config
+from fcn_config import Config_fcn
 from tensorflow.python.client import device_lib
 #from encoder_decoder_object_det import Conv3l2
 from util import *
@@ -571,19 +571,21 @@ def set_fcn36_num_step_and_aug():
 
 
 if __name__ == '__main__':
+    from multigpu_model import multi_gpu_model
     from parallel_model import ParallelModel
-    os.environ["CUDA_VISIBLE_DEVICES"] = Config.gpu1# + ', ' + Config.gpu2
-    fcn_detnet = Fcn_det().fcn36_deconv_backbone()
-    if Config.gpu_count > 1:
-        parallel_model = ParallelModel(fcn_detnet, 3)
-        print('This session is using {}'.format(Config.gpu_count))
+    os.environ["CUDA_VISIBLE_DEVICES"] = Config_fcn.gpu1# + ', ' + Config_fcn.gpu2
+    with tf.device('/cpu:0'):
+        fcn_detnet = Fcn_det().fcn36_deconv_backbone()
+    if Config_fcn.gpu_count > 1:
+        parallel_model = multi_gpu_model(fcn_detnet, [int(Config_fcn.gpu1), int(Config_fcn.gpu2), int(Config_fcn.gpu3)])
+        print('This session is using {}'.format(Config_fcn.gpu_count))
         print('------------------------------------')
-        print('This model is using {}'.format(Config.backbone))
+        print('This model is using {}'.format(Config_fcn.backbone))
         print()
         hyper_para = fcn_tune_loss_weight()
-        BATCH_SIZE = Config.image_per_gpu * Config.gpu_count
+        BATCH_SIZE = Config_fcn.image_per_gpu * Config_fcn.gpu_count
         print('batch size is :', BATCH_SIZE)
-        EPOCHS = Config.epoch
+        EPOCHS = Config_fcn.epoch
 
         NUM_TO_AUG, TRAIN_STEP_PER_EPOCH = set_fcn36_num_step_and_aug()
         # NUM_TO_CROP, NUM_TO_AUG = 20, 10
@@ -592,7 +594,7 @@ if __name__ == '__main__':
         #################
         # without focal loss
         #################
-        hyper = '{}_loss:{}_det:{}_lr:0.01'.format(Config.backbone + '_multi', 'nm', 0.2)  # _l2:{}_bkg:{}'.format()
+        hyper = '{}_loss:{}_det:{}_lr:0.01'.format(Config_fcn.backbone + '_multi', 'nm', 0.2)  # _l2:{}_bkg:{}'.format()
         print(hyper)
         print()
         model_weights_saver = save_model_weights(hyper)
@@ -623,7 +625,7 @@ if __name__ == '__main__':
         for i, det_weight in enumerate(hyper_para[0]):
             for j, fkg_weight in enumerate(hyper_para[1]):
                 for k, bkg_weight in enumerate(hyper_para[3]):
-                    hyper = '{}_loss:{}_det:{}_fkg:{}_bkg:{}_lr:0.01'.format(Config.backbone+ '_multi', 'fd',
+                    hyper = '{}_loss:{}_det:{}_fkg:{}_bkg:{}_lr:0.01'.format(Config_fcn.backbone+ '_multi', 'fd',
                                                                              det_weight[0],
                                                                              fkg_weight,
                                                                              bkg_weight)  # _l2:{}_bkg:{}'.format()
