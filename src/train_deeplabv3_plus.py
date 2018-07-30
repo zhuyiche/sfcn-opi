@@ -44,7 +44,7 @@ def callback_preparation(model, hyper):
 def crop_shape_generator_with_heavy_aug(features, cls_labels, batch_size,
                                        aug_num=25):
     batch_features = np.zeros((batch_size * aug_num, 256, 256, 3))
-    batch_cls_labels = np.zeros((batch_size * aug_num, 256, 256, 2))
+    batch_cls_labels = np.zeros((batch_size * aug_num, 256, 256, 5))
     while True:
         counter = 0
         for i in range(batch_size):
@@ -109,14 +109,14 @@ def data_prepare(print_image_shape=False, print_input_shape=False):
         print('test_imgs: {}, test_cls_masks: {}'.format(test_imgs.shape, test_cls_masks.shape))
         print()
 
-    train_cls = np_utils.to_categorical(train_cls_masks, 2)
-    train_cls = reshape_mask(train_cls_masks, train_cls, 2)
+    train_cls = np_utils.to_categorical(train_cls_masks, 5)
+    train_cls = reshape_mask(train_cls_masks, train_cls, 5)
 
-    valid_cls = np_utils.to_categorical(valid_cls_masks, 2)
-    valid_cls = reshape_mask(valid_cls_masks, valid_cls, 2)
+    valid_cls = np_utils.to_categorical(valid_cls_masks, 5)
+    valid_cls = reshape_mask(valid_cls_masks, valid_cls, 5)
 
-    test_cls = np_utils.to_categorical(test_cls_masks, 2)
-    test_cls = reshape_mask(test_cls_masks, test_cls, 2)
+    test_cls = np_utils.to_categorical(test_cls_masks, 5)
+    test_cls = reshape_mask(test_cls_masks, test_cls, 5)
 
     if print_input_shape:
         print('input shape print below: ')
