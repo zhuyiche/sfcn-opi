@@ -27,7 +27,7 @@ import os
 from tqdm import tqdm
 
 WEIGHTS_PATH_X = "https://github.com/bonlime/keras-deeplab-v3-plus/releases/download/1.1/deeplabv3_xception_tf_dim_ordering_tf_kernels.h5"
-
+WEIGHTS_PATH_MOBILE = "https://github.com/bonlime/keras-deeplab-v3-plus/releases/download/1.1/deeplabv3_mobilenetv2_tf_dim_ordering_tf_kernels.h5"
 
 class BilinearUpsampling(Layer):
     """Just a simple bilinear upsampling layer. Works only with TF.
@@ -251,7 +251,7 @@ def _inverted_res_block(inputs, expansion, stride, alpha, filters, block_id, ski
 
 
 def Deeplabv3(weights='pascal_voc', input_tensor=None, input_shape=(256, 256, 3), classes=5,
-              backbone='xception', OS=8, alpha=1.):
+              backbone='mobilenetv2', OS=8, alpha=1.):
     """ Instantiates the Deeplabv3+ architecture
     Optionally loads weights pre-trained
     on PASCAL VOC. This model is available for TensorFlow only,
@@ -295,7 +295,7 @@ def Deeplabv3(weights='pascal_voc', input_tensor=None, input_shape=(256, 256, 3)
         raise RuntimeError('The Deeplabv3+ model is only available with '
                            'the TensorFlow backend.')
 
-    if not (backbone in {'xception', 'mobilenetv2'}):
+    if not (backbone in {'xception', 'mobilenetv2', 'sip_xception'}):
         raise ValueError('The `backbone` argument should be either '
                          '`xception`  or `mobilenetv2` ')
 
@@ -312,6 +312,7 @@ def Deeplabv3(weights='pascal_voc', input_tensor=None, input_shape=(256, 256, 3)
             entry_block3_stride = 1
             middle_block_rate = 2  # ! Not mentioned in paper, but required
             exit_block_rates = (2, 4)
+            #atrous_rates = (1, 3, 6)
             atrous_rates = (12, 24, 36)
         else:
             entry_block3_stride = 2
@@ -327,7 +328,6 @@ def Deeplabv3(weights='pascal_voc', input_tensor=None, input_shape=(256, 256, 3)
         x = _conv2d_same(x, 64, 'entry_flow_conv1_2', kernel_size=3, stride=1)
         x = BatchNormalization(name='entry_flow_conv1_2_BN')(x)
         x = Activation('relu')(x)
-
         x = _xception_block(x, [128, 128, 128], 'entry_flow_block1',
                             skip_connection_type='conv', stride=2,
                             depth_activation=False)
@@ -338,6 +338,7 @@ def Deeplabv3(weights='pascal_voc', input_tensor=None, input_shape=(256, 256, 3)
         x = _xception_block(x, [728, 728, 728], 'entry_flow_block3',
                             skip_connection_type='conv', stride=entry_block3_stride,
                             depth_activation=False)
+
         for i in range(16):
             x = _xception_block(x, [728, 728, 728], 'middle_flow_unit_{}'.format(i + 1),
                                 skip_connection_type='sum', stride=1, rate=middle_block_rate,
@@ -349,8 +350,40 @@ def Deeplabv3(weights='pascal_voc', input_tensor=None, input_shape=(256, 256, 3)
         x = _xception_block(x, [1536, 1536, 2048], 'exit_flow_block2',
                             skip_connection_type='none', stride=1, rate=exit_block_rates[1],
                             depth_activation=True)
+    elif backbone == 'sip_xception':
+        entry_block3_stride = 1
+        middle_block_rate = 2  # ! Not mentioned in paper, but required
+        exit_block_rates = (2, 4)
+        atrous_rates = (2, 3, 4)
+        #atrous_rates = (12, 24, 36)'
+        x = Conv2D(32, (3, 3), strides=(2, 2),
+                   name='entry_flow_conv1_1', use_bias=False, padding='same')(img_input)
+        x = BatchNormalization(name='entry_flow_conv1_1_BN')(x)
+        x = Activation('relu')(x)
+        x = _xception_block(x, [64, 64, 64], 'entry_flow_block1',
+                            skip_connection_type='conv', stride=2,
+                            depth_activation=False)
+        x, skip1 = _xception_block(x, [128, 128, 128], 'entry_flow_block2',
+                                   skip_connection_type='conv', stride=2,
+                                   depth_activation=False, return_skip=True)
 
-    else:
+        x = _xception_block(x, [256, 256, 256], 'entry_flow_block3',
+                            skip_connection_type='conv', stride=entry_block3_stride,
+                            depth_activation=False)
+        for i in range(16):
+            x = _xception_block(x, [256, 256, 256], 'middle_flow_unit_{}'.format(i + 1),
+                                skip_connection_type='sum', stride=1, rate=middle_block_rate,
+                                depth_activation=False)
+
+        x = _xception_block(x, [256, 512, 512], 'exit_flow_block1',
+                            skip_connection_type='conv', stride=1, rate=exit_block_rates[0],
+                            depth_activation=False)
+        x = _xception_block(x, [1024, 1024, 1536], 'exit_flow_block2',
+                            skip_connection_type='none', stride=1, rate=exit_block_rates[1],
+                            depth_activation=True)
+
+
+    elif backbone == 'mobilenetv2':
         OS = 8
         first_block_filters = _make_divisible(32 * alpha, 8)
         x = Conv2D(first_block_filters,
@@ -422,7 +455,7 @@ def Deeplabv3(weights='pascal_voc', input_tensor=None, input_shape=(256, 256, 3)
     b0 = Activation('relu', name='aspp0_activation')(b0)
 
     # there are only 2 branches in mobilenetV2. not sure why
-    if backbone == 'xception':
+    if backbone == 'xception' or backbone == 'sip_xception':
         # rate = 6 (12)
         b1 = SepConv_BN(x, 256, 'aspp1',
                         rate=atrous_rates[0], depth_activation=True, epsilon=1e-5)
@@ -435,7 +468,7 @@ def Deeplabv3(weights='pascal_voc', input_tensor=None, input_shape=(256, 256, 3)
 
         # concatenate ASPP branches & project
         x = Concatenate()([b4, b0, b1, b2, b3])
-    else:
+    elif backbone == 'mobilenetv2':
         x = Concatenate()([b4, b0])
 
     x = Conv2D(256, (1, 1), padding='same',
@@ -446,7 +479,7 @@ def Deeplabv3(weights='pascal_voc', input_tensor=None, input_shape=(256, 256, 3)
 
     # DeepLab v.3+ decoder
 
-    if backbone == 'xception':
+    if backbone == 'xception' or backbone == 'sip_xception':
         # Feature projection
         # x4 (x2) block
         x = BilinearUpsampling(output_size=(int(np.ceil(input_shape[0] / 4)),
@@ -456,6 +489,7 @@ def Deeplabv3(weights='pascal_voc', input_tensor=None, input_shape=(256, 256, 3)
         dec_skip1 = BatchNormalization(
             name='feature_projection0_BN', epsilon=1e-5)(dec_skip1)
         dec_skip1 = Activation('relu')(dec_skip1)
+
         x = Concatenate()([x, dec_skip1])
         x = SepConv_BN(x, 256, 'decoder_conv0',
                        depth_activation=True, epsilon=1e-5)
@@ -470,6 +504,7 @@ def Deeplabv3(weights='pascal_voc', input_tensor=None, input_shape=(256, 256, 3)
 
     x = Conv2D(classes, (1, 1), padding='same', name=last_layer_name)(x)
     x = BilinearUpsampling(output_size=(input_shape[0], input_shape[1]))(x)
+    x = Activation('softmax')(x)
 
     # Ensure that the model takes into account
     # any potential predecessors of `input_tensor`.
@@ -479,14 +514,18 @@ def Deeplabv3(weights='pascal_voc', input_tensor=None, input_shape=(256, 256, 3)
         inputs = img_input
 
     model = Model(inputs, x, name='deeplabv3+')
-
-    # load weights
-
+    """
     if weights == 'pascal_voc':
-        weights_path = get_file('deeplabv3_xception_tf_dim_ordering_tf_kernels.h5',
-                                WEIGHTS_PATH_X,
-                                cache_subdir='models')
+        if backbone == 'xception':
+            weights_path = get_file('deeplabv3_xception_tf_dim_ordering_tf_kernels.h5',
+                                    WEIGHTS_PATH_X,
+                                    cache_subdir='models')
+        elif backone == 'mobilenetv2':
+            weights_path = get_file('deeplabv3_mobilenetv2_tf_dim_ordering_tf_kernels.h5',
+                                    WEIGHTS_PATH_MOBILE,
+                                    cache_subdir='models')
         model.load_weights(weights_path, by_name=True)
+    """
     return model
 
 

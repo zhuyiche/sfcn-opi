@@ -1,11 +1,11 @@
 from util import load_data, set_gpu, set_num_step_and_aug, lr_scheduler, aug_on_fly, heavy_aug_on_fly
 from keras.optimizers import SGD
-from encoder_decoder_object_det import data_prepare, save_model_weights, tune_loss_weight, TimerCallback
+from encoder_decoder_object_det import data_prepare, tune_loss_weight, TimerCallback
 from keras.callbacks import TensorBoard, ModelCheckpoint, EarlyStopping, LearningRateScheduler
 from config import Config
 from keras.utils import np_utils
 from deeplabv3_plus import load_pretrain_weights, preprocess_input, Deeplabv3
-from loss import classification_loss
+from loss import deeplab_cls_loss
 import os
 import numpy as np
 from imgaug import augmenters as iaa
@@ -33,12 +33,12 @@ def callback_preparation(model, hyper):
     timer = TimerCallback()
     timer.set_model(model)
     tensorboard_callback = TensorBoard(os.path.join(TENSORBOARD_DIR, hyper +'_tb_logs'))
-    checkpoint_callback = ModelCheckpoint(os.path.join(CHECKPOINT_DIR,
-                                                       hyper + '_cp.h5'), period=1)
+    #checkpoint_callback = ModelCheckpoint(os.path.join(CHECKPOINT_DIR,
+                                                     #  hyper + '_cp.h5'), period=1)
     earlystop_callback = EarlyStopping(monitor='val_loss',
                                        patience=5,
                                        min_delta=0.001)
-    return [tensorboard_callback, checkpoint_callback, timer, earlystop_callback]
+    return [tensorboard_callback, timer, earlystop_callback]
 
 
 def crop_shape_generator_with_heavy_aug(features, cls_labels, batch_size,
@@ -53,9 +53,13 @@ def crop_shape_generator_with_heavy_aug(features, cls_labels, batch_size,
             cls_label_index = cls_labels[index]
 
             for k in range(aug_num):
-                aug_feature, aug_cls_label= heavy_aug_on_fly(feature_index, cls_label_index)
-                batch_features[counter] = aug_feature
-                batch_cls_labels[counter] = aug_cls_label
+                if k == 0:
+                    batch_features[counter] = feature_index
+                    batch_cls_labels[counter] = cls_label_index
+                else:
+                    aug_feature, aug_cls_label= heavy_aug_on_fly(feature_index, cls_label_index)
+                    batch_features[counter] = aug_feature
+                    batch_cls_labels[counter] = aug_cls_label
                 counter = counter + 1
 
         yield batch_features, batch_cls_labels
@@ -126,24 +130,31 @@ def data_prepare(print_image_shape=False, print_input_shape=False):
         print()
     return [train_imgs, train_cls, valid_imgs, valid_cls,  test_imgs, test_cls]
 
+
 if __name__ == '__main__':
-    set_gpu()
+    os.environ["CUDA_VISIBLE_DEVICES"] = Config.gpu1
     hyper_para = tune_loss_weight()
     BATCH_SIZE = Config.image_per_gpu * Config.gpu_count
     print('batch size is :', BATCH_SIZE)
     EPOCHS = Config.epoch
+    cls_weight = np.array([0.5, 9, 10.1, 6.8, 19])
+    #cls_weight = np.array([0.5, 0.9, 1.01, 0.68, 1.9])
 
-    NUM_TO_AUG, TRAIN_STEP_PER_EPOCH = set_num_step_and_aug()
+    NUM_TO_AUG, TRAIN_STEP_PER_EPOCH = 2, 100
 
     data = data_prepare(print_input_shape=True, print_image_shape=True)
-    network = Deeplabv3()
+    network = Deeplabv3(backbone=Config.backbone)
     optimizer = SGD(lr=0.01, decay=0.00001, momentum=0.9, nesterov=True)
-    hyper = '{}_loss:{}_lr:0.01'.format('Deeplabv3+', Config.model_loss)
-    model_weights_saver = save_model_weights(hyper)
+    hyper = '{}_{}_loss:{}_lr:0.01'.format('Deeplabv3',Config.backbone, 'categorical_crossentropy')
+    model_weights_saver = os.path.join(WEIGHTS_DIR, hyper + '_train.h5')
+    print(hyper)
+    print(model_weights_saver)
+    network.summary()
     if not os.path.exists(model_weights_saver):
-        #loss_input =
-        network.compile(optimizer=optimizer, loss=['categorical_crossentropy'], metrics=['accuracy'])
-        network.summary()
+        loss_input = deeplab_cls_loss(cls_weight)
+        print('model start to compile')
+        network.compile(optimizer=optimizer, loss=loss_input, metrics=['accuracy'])
+
 
         list_callback = callback_preparation(network, hyper)
         list_callback.append(LearningRateScheduler(lr_scheduler))
@@ -157,7 +168,7 @@ if __name__ == '__main__':
                                                                                 data[3],
                                                                                 batch_size=BATCH_SIZE,
                                                                                 aug_num=NUM_TO_AUG),
-                              validation_steps=10,
+                              validation_steps=3,
                               callbacks=list_callback)
 
         network.save_weights(model_weights_saver)
