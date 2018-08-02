@@ -180,13 +180,6 @@ class SFCNnetwork:
                                                   trainable=trainable)
             #print(tf.trainable_variables())
         return x_future_det_one, x_future_cls_det_two
-
-    ###################
-    # Refined Detection Branch
-    ###################
-
-
-
     ###################
     # Detection Branch
     ###################
@@ -563,7 +556,6 @@ def tune_loss_weight():
     cls_weight_in_joint = [0.5, 0.83, 0.94, 0.78, 2]
     joint_weight = 1
     kernel_weight = 1
-    cls_smooth_factor = [0.1, 0.4, 0.7, 0.9]
     return [det_weight, cls_weight, cls_weight_in_joint, joint_weight, kernel_weight]
 
 
@@ -583,7 +575,8 @@ def save_model_weights(type, hyper):
 
 
 if __name__ == '__main__':
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(Config.gpu)
+    if Config.gpu_count == 1:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(Config.gpu1)
     weights = tune_loss_weight()
     CROP_SIZE = 64
     BATCH_SIZE = Config.image_per_gpu * Config.gpu_count
@@ -596,10 +589,11 @@ if __name__ == '__main__':
     optimizer = SGD(lr=0.01, momentum=0.9, decay=1e-6, nesterov=True)
 
     model_weights_saver = save_model_weights('base', str(EPOCHS))
+    # Train Detection Branch
     if not os.path.exists(model_weights_saver[0]):
         det_model = det_model_compile(nn=network,
                                       det_loss_weight=weights[0], optimizer=optimizer, softmax_trainable=False)
-        print('base detection is training')
+        print('detection model is training')
         det_model.fit_generator(generator_with_aug(data[0], data[1], data[2],
                                                    crop_size=CROP_SIZE,
                                                    batch_size=BATCH_SIZE,
@@ -614,9 +608,9 @@ if __name__ == '__main__':
                                 validation_steps=5, callbacks=callback_preparation(det_model))
 
         det_model.save_weights(model_weights_saver[0])
-
+    # Train Classification Branch
     if not os.path.exists(model_weights_saver[1]):
-        print('base classification is training')
+        print('classification model is training')
         cls_model = cls_model_compile(nn=network, cls_loss_weight=weights[1],
                                       optimizer=optimizer,
                                       load_weights=model_weights_saver[0],
@@ -634,8 +628,9 @@ if __name__ == '__main__':
                                                                    type='classification'),
                                 validation_steps=5, callbacks=callback_preparation(cls_model))
         cls_model.save_weights(model_weights_saver[1])
+    # Train Joint Model
     if not os.path.exists(model_weights_saver[2]):
-        print('base joint is training')
+        print('joint model is training')
         joint_model = joint_model_compile(nn=network, det_loss_weight=weights[0], cls_loss_in_joint=weights[2],
                                           joint_loss_weight=weights[3],  optimizer=optimizer,
                                           load_weights=model_weights_saver[1],
