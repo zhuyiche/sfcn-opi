@@ -22,8 +22,11 @@ class Config_fcn(object):
     parser.add_argument("--backbone", default='fcn36', type=str)
     parser.add_argument("--test_img", default=15, type=int)
     parser.add_argument("--data", default='crop', type=str)
+    parser.add_argument("--det_weight", default=0.1, type=float)
+
     args = parser.parse_args()
     backbone = args.backbone
+    det_weight = args.det_weight
     data=args.data
     loss_backend = args.loss_backend
     summary = args.summary

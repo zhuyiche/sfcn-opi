@@ -103,7 +103,7 @@ def get_metrics(gt, pred, r=6):
         y_max = np.max(temp[:, 1]) + 1
 
         #gt_map = np.zeros((y_max, x_max), dtype='int')
-        gt_map = np.zeros((500, 500), dtype='int')
+        gt_map = np.zeros((500, 500)).astype(np.int8)
         for i in range(gt.shape[0]):
             x = gt[i, 0]
             y = gt[i, 1]
@@ -112,7 +112,7 @@ def get_metrics(gt, pred, r=6):
             x2 = min(x_max, x + r)
             y2 = min(y_max, y + r)
             # gt_map[y1:y2,x1:x2] = 1
-            cv2.circle(gt_map, (x, y), r, -1)
+            cv2.circle(gt_map, (x, y), r, 1, -1)
         #plt.imshow(gt_map)
         #plt.show()
 
@@ -147,7 +147,7 @@ def eval_single_img(model, img_dir, print_img=True,
     cropped_img2 = img[256: 512, 0: 256, :]  # 2, 4
     cropped_img3 = img[0: 256, 256: 512, :]
     cropped_img4 = img[256: 512, 256: 512, :]
-    print('crop shape: ', cropped_img1.shape)
+    #print('crop shape: ', cropped_img1.shape)
     #plt.imshow(cropped_img1)
     #plt.colorbar()
     #plt.show()
@@ -170,7 +170,7 @@ def eval_single_img(model, img_dir, print_img=True,
         plt.title(weight_path)
         plt.colorbar()
         plt.show()
-    print(output.shape)
+    #print(output.shape)
     p, r, f1, tp = score_single_img(output, img_dir=img_dir, prob_threshold=prob_threshold, print_single_result=print_single_result)
     return p, r, f1, tp
 
@@ -183,7 +183,7 @@ def score_single_img(input, img_dir, prob_threshold=None, print_single_result=Tr
     num_of_nuclei = boxes.shape[0]
 
     mat_path = os.path.join(IMG_DIR, img_dir, img_dir + '_detection.mat')
-    print(mat_path)
+    #print(mat_path)
     gt = sio.loadmat(mat_path)['detection']
     outputbase = cv2.imread(os.path.join(IMG_DIR, img_dir, img_dir + '.bmp'))
     if print_single_result:
@@ -277,13 +277,17 @@ if __name__ == '__main__':
     #weight_path = 'focal_double_resnet50_loss:fd_det:0.1_fkg:2_bkg:2_lr:0.01_train.h5'
     imgdir = 'img' + str(2)
     model = Fcn_det().fcn36_deconv_backbone()
-    model.load_weights(os.path.join(WEIGHT_DIR, weight_path))
-    prob_threshhold = [0.6, 0.7, 0.8]
-    #eval_single_img(model, imgdir)
-
-    for prob in prob_threshhold:
-        print('The nms threshold is ', prob)
-        eval_testset(model, prob_threshold=prob, print_img=True, print_single_result=True)
+    for weight in os.listdir(WEIGHT_DIR):
+        if 'loss:fd' in weight:
+            print(weight)
+            weightp = os.path.join(WEIGHT_DIR, weight)
+            model.load_weights(weightp)
+        #model.load_weights(os.path.join(WEIGHT_DIR, weight_path))
+            prob_threshhold = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+            #eval_single_img(model, imgdir)
+            for prob in prob_threshhold:
+                print('The nms threshold is ', prob)
+                eval_testset(model, prob_threshold=prob, print_img=False, print_single_result=False)
 
 
 

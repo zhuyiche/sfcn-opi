@@ -8,14 +8,11 @@ cls_threshold = 0.8
 def deeplab_cls_loss(weights):
     def _cls_loss(y_true, y_pred):
         y_pred = tf.clip_by_value(y_pred, epsilon, 1-epsilon)
-        y_pred_cls1 = y_pred[:, :, :, 1]
-        y_pred_cls2 = y_pred[:, :, :, 2]
-        y_pred_cls3 = y_pred[:, :, :, 3]
-        y_pred_cls4 = y_pred[:, :, :, 4]
-        y_true_cls1 = y_true[:, :, :, 1]
-        y_true_cls2 = y_true[:, :, :, 2]
-        y_true_cls3 = y_true[:, :, :, 3]
-        y_true_cls4 = y_true[:, :, :, 4]
+        indicator = K.greater_equal(y_pred, cls_threshold)
+        indicator = K.cast(indicator, tf.float32)
+        result = -K.mean(weights * y_true * K.log(y_pred))
+        return result
+    return _cls_loss
 
 
 

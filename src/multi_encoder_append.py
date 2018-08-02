@@ -594,7 +594,7 @@ if __name__ == '__main__':
         #################
         # without focal loss
         #################
-        hyper = '{}_loss:{}_det:{}_lr:0.01'.format(Config_fcn.backbone + '_multi', 'nm', 0.2)  # _l2:{}_bkg:{}'.format()
+        hyper = '{}_loss:{}_det:{}_lr:0.01'.format(Config_fcn.backbone + '_mult', 'nm', 0.2)  # _l2:{}_bkg:{}'.format()
         print(hyper)
         print()
         model_weights_saver = save_model_weights(hyper)

@@ -947,9 +947,13 @@ def crop_shape_generator_with_heavy_aug(features, det_labels, batch_size,
             det_label_index = det_labels[index]
 
             for k in range(aug_num):
-                aug_feature, aug_det_label= heavy_aug_on_fly(feature_index, det_label_index)
-                batch_features[counter] = aug_feature
-                batch_det_labels[counter] = aug_det_label
+                if k == 0:
+                    batch_features[counter] = feature_index
+                    batch_det_labels[counter] = det_label_index
+                else:
+                    aug_feature, aug_det_label= heavy_aug_on_fly(feature_index, det_label_index)
+                    batch_features[counter] = aug_feature
+                    batch_det_labels[counter] = aug_det_label
                 counter = counter + 1
 
         yield batch_features, batch_det_labels
@@ -1034,21 +1038,16 @@ def tune_loss_weight():
     det_weight = [np.array([0.2, 0.8]),np.array([0.1, 0.9]), np.array([0.15, 0.85])]
     l2_weight = 0.001
 
-    fkg_smooth_factor = [0.5, 1, 1.5, 2]
-    bkg_smooth_factor = [0.5, 1, 1.5, 2]
-    fkb_extend_smooth_factor = [0.6, 0.7, 0.9, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9,
-                                2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.1, 3.2, 3.3,
-                                3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.1, 4.2, 4.3, 4.4, 4.5]
-    bkg_extend_smooth_factor = [0.6, 0.7, 0.9, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9,
-                                2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8, 2.9, 3.1, 3.2, 3.3,
-                                3.4, 3.5, 3.6, 3.7, 3.8, 3.9, 4.1, 4.2, 4.3, 4.4, 4.5]
+    fkg_smooth_factor = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
+    bkg_smooth_factor = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0]
+
+
     det_extend_weight = [np.array([0.21, 0.79]), np.array([0.19, 0.81]),
                          np.array([0.18, 0.82]), np.array([0.17, 0.83]),
                          np.array([0.22, 0.78]), np.array([0.23, 0.77]),
                          np.array([0.24, 0.76])]
     ind_factor = [np.array([0.2, 0.8]),np.array([0.1, 0.9]), np.array([0.15, 0.85])]
-    return [det_weight, fkg_smooth_factor, l2_weight, bkg_smooth_factor,
-            fkb_extend_smooth_factor, bkg_extend_smooth_factor, det_extend_weight, ind_factor]
+    return [det_weight, fkg_smooth_factor, l2_weight, bkg_smooth_factor, det_extend_weight, ind_factor]
 
 
 def save_model_weights(hyper):
@@ -1057,7 +1056,7 @@ def save_model_weights(hyper):
     :param hyper:
     :return:
     """
-    det_model_weights_saver = os.path.join(WEIGHTS_DIR, str(Config.model_loss) + '_' + hyper + '_train.h5')
+    det_model_weights_saver = os.path.join(WEIGHTS_DIR, hyper + '_train.h5')
     return det_model_weights_saver
 
 
@@ -1068,50 +1067,51 @@ if __name__ == '__main__':
     print('batch size is :', BATCH_SIZE)
     EPOCHS = Config.epoch
 
-    NUM_TO_AUG, TRAIN_STEP_PER_EPOCH = set_num_step_and_aug()
+    NUM_TO_AUG, TRAIN_STEP_PER_EPOCH = 5, 100
     #NUM_TO_CROP, NUM_TO_AUG = 20, 10
     data = data_prepare(print_input_shape=True, print_image_shape=True)
     network = Detnet()
     optimizer = SGD(lr=0.01, decay=0.00001, momentum=0.9, nesterov=True)
 
-    for i, det_weight in enumerate(hyper_para[0]):
-        if Config.model_loss == 'focal_double':
-            print('------------------------------------')
-            print('This model is using {}'.format(Config.model_loss))
-            print()
-            for j, fkg_weight in enumerate(hyper_para[1]):
-                for k, bkg_weight in enumerate(hyper_para[3]):
-                    hyper = '{}_loss:{}_det:{}_fkg:{}_bkg:{}_lr:0.01'.format(Config.backbone, Config.model_loss,
-                                                                             det_weight[0],
-                                                                             fkg_weight,
-                                                                             bkg_weight)  # _l2:{}_bkg:{}'.format()
-                    print(hyper)
-                    print()
-                    model_weights_saver = save_model_weights(hyper)
-                    if not os.path.exists(model_weights_saver):
-                        detnet_model = detnet_model_compile(nn=network,
-                                                            summary=Config.summary,
-                                                            det_loss_weight=det_weight,
-                                                            optimizer=optimizer,
-                                                            fkg_smooth_factor=fkg_weight,
-                                                            bkg_smooth_factor=bkg_weight)
-                        print('base detection is training')
-                        list_callback = callback_preparation(detnet_model, hyper)
-                        list_callback.append(LearningRateScheduler(lr_scheduler))
-                        detnet_model.fit_generator(ori_shape_generator_with_heavy_aug(data[0],
-                                                                                      data[1],
-                                                                                      batch_size=BATCH_SIZE,
-                                                                                      aug_num=NUM_TO_AUG),
-                                                   epochs=EPOCHS,
-                                                   steps_per_epoch=TRAIN_STEP_PER_EPOCH,
-                                                   validation_data=ori_shape_generator_with_heavy_aug(
-                                                       data[2], data[3], batch_size=BATCH_SIZE,
-                                                       aug_num=NUM_TO_AUG),
-                                                   validation_steps=10,
-                                                   callbacks=list_callback)
+    #for i, det_weight in enumerate(hyper_para[0]):
+    if Config.model_loss == 'focal_double':
+        print('------------------------------------')
+        print('This model is using {}'.format(Config.model_loss))
+        print()
+        for j, fkg_weight in enumerate(hyper_para[1]):
+            for k, bkg_weight in enumerate(hyper_para[3]):
+                hyper = '{}_loss:{}_det:{}_fkg:{}_bkg:{}_lr:0.01'.format('fcn36', 'focal_double',
+                                                                         Config.det_weight,
+                                                                         fkg_weight,
+                                                                         bkg_weight)  # _l2:{}_bkg:{}'.format()
+                print(hyper)
+                print()
+                model_weights_saver = save_model_weights(hyper)
+                if not os.path.exists(model_weights_saver):
+                    det_weight2 = 1 - Config.det_weight
+                    detnet_model = detnet_model_compile(nn=network,
+                                                        summary=Config.summary,
+                                                        det_loss_weight=np.array([Config.det_weight, det_weight2]),
+                                                        optimizer=optimizer,
+                                                        fkg_smooth_factor=fkg_weight,
+                                                        bkg_smooth_factor=bkg_weight)
+                    print('base detection is training')
+                    list_callback = callback_preparation(detnet_model, hyper)
+                    list_callback.append(LearningRateScheduler(lr_scheduler))
+                    detnet_model.fit_generator(ori_shape_generator_with_heavy_aug(data[0],
+                                                                                  data[1],
+                                                                                  batch_size=BATCH_SIZE,
+                                                                                  aug_num=NUM_TO_AUG),
+                                               epochs=EPOCHS,
+                                               steps_per_epoch=TRAIN_STEP_PER_EPOCH,
+                                               validation_data=ori_shape_generator_with_heavy_aug(
+                                                   data[2], data[3], batch_size=BATCH_SIZE,
+                                                   aug_num=NUM_TO_AUG),
+                                               validation_steps=10,
+                                               callbacks=list_callback)
 
-                        detnet_model.save_weights(model_weights_saver)
-
+                    detnet_model.save_weights(model_weights_saver)
+    """
         if Config.model_loss == 'focal' or Config.model_loss == 'focal_no':
             print('------------------------------------')
             print('This model is using {}'.format(Config.model_loss))
@@ -1212,5 +1212,5 @@ if __name__ == '__main__':
 
                             detnet_model.save_weights(model_weights_saver)
 
-
+"""
 
