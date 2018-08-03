@@ -8,6 +8,14 @@ import scipy.io as sio
 epsilon = 1e-7
 
 def non_max_suppression(img, overlap_thresh=0.1, max_boxes=1200, r=5, prob_thresh=0.85):
+    """
+    NMS for testing the result.
+    :param img: image to use NMS
+    :param overlap_thresh: overlap thresh for two bounding box
+    :param max_boxes: maximum number of bounding box to appear in the image
+    :param r: the radius of the circle.
+    :param prob_thresh: to show only if its above the probability threshold.
+    """
     x1s = []
     y1s = []
     x2s = []

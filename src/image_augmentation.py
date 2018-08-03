@@ -161,42 +161,6 @@ class ImageCropping:
         else:
             return cropped_img
 
-    def image_cropping_process(self, num_crop_img=30, files = ['train', 'test', 'validation']):
-        """
-        Crop image and masks into 64 * 64 * 3
-        :param data_path:
-        :param num_crop_img:
-        :param files:
-        :return:
-        """
-        for file in files:
-            counter = 0
-            new_path = '{}/{}'.format(self.new_filename, file)
-            old_path = '{}/{}'.format(self.old_filename, file)
-            for i, _img_folder in enumerate(os.listdir(old_path)):
-                masks = []
-                for k, _img_file in enumerate(os.listdir(os.path.join(old_path, _img_folder))):
-                    if '_detection.bmp' in _img_file:
-                        read_det_mask_path = os.path.join(old_path, _img_folder, _img_file)
-                        det_img = cv2.imread(read_det_mask_path)
-                        masks.append(det_img)
-                    elif '_classification.bmp' in _img_file:
-                        read_cls_mask_path = os.path.join(old_path, _img_folder, _img_file)
-                        cls_img = cv2.imread(read_cls_mask_path)
-                        masks.append(cls_img)
-                    elif '_original.bmp' in _img_file:
-                        read_img_path = os.path.join(old_path, _img_folder, _img_file)
-                        img = cv2.imread(read_img_path)
-                #print(read_img_path, read_det_mask_path, read_cls_mask_path)
-                for j in range(1, num_crop_img+1):
-                    counter = counter + 1
-                    dm.check_directory('{}/img{}'.format(new_path, counter))
-                    cropped_img, cropped_det_mask, cropped_cls_mask = ImageCropping.crop_image(img, masks=masks)
-                    dm.check_cv2_imwrite(os.path.join(new_path, 'img{}'.format(counter), 'img{}_original.bmp'.format(counter)), cropped_img)
-                    dm.check_cv2_imwrite(os.path.join(new_path, 'img{}'.format(counter), 'img{}_detection.bmp'.format(counter)), cropped_det_mask)
-                    dm.check_cv2_imwrite(os.path.join(new_path, 'img{}'.format(counter), 'img{}_classification.bmp'.format(counter)), cropped_cls_mask)
-            print('there are {} cropped images for {}'.format(counter, file))
-
 
 if __name__ == '__main__':
     batch_crop_image_parts(TRAIN_OLD_DATA_DIR, TRAIN_TARGET_DATA_DIR)

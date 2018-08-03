@@ -4,10 +4,9 @@ import numpy as np
 np.set_printoptions(threshold=np.inf)
 import os, cv2, shutil
 from scipy.io import loadmat
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageEnhance
 from glob import glob
 from imgaug import augmenters as iaa
-import imgaug as ia
 from config import Config
 
 
@@ -132,25 +131,24 @@ def heavy_aug_on_fly(img, det_mask):
                 # These are additional augmentation.
                 #iaa.ContrastNormalization((0.75, 1.5))
 
-            ])])
-            #elasitic_sometime(
-             #   iaa.ElasticTransformation(alpha=(0.5, 3.5), sigma=0.25), random_order=True])
-        """
-                    edge_detect_sometime(iaa.OneOf([
-                        iaa.EdgeDetect(alpha=(0, 0.7)),
-                        iaa.DirectedEdgeDetect(alpha=(0,0.7), direction=(0.0, 1.0)
-                                               )
-                    ])),
-                    add_gauss_noise(iaa.AdditiveGaussianNoise(loc=0,
-                                                              scale=(0.0, 0.05*255),
-                                                              per_channel=0.5)
-                                    ),
-                    iaa.Sometimes(0.3,
-                                  iaa.GaussianBlur(sigma=(0, 0.5))
-                                  ),
-                    elasitic_sometime(
-                        iaa.ElasticTransformation(alpha=(0.5, 3.5), sigma=0.25)
-                    """
+            ]),
+
+            edge_detect_sometime(iaa.OneOf([
+                iaa.EdgeDetect(alpha=(0, 0.7)),
+                iaa.DirectedEdgeDetect(alpha=(0,0.7), direction=(0.0, 1.0)
+                                       )
+            ])),
+            add_gauss_noise(iaa.AdditiveGaussianNoise(loc=0,
+                                                      scale=(0.0, 0.05*255),
+                                                      per_channel=0.5)
+                            ),
+            iaa.Sometimes(0.3,
+                          iaa.GaussianBlur(sigma=(0, 0.5))
+                          ),
+            elasitic_sometime(
+                iaa.ElasticTransformation(alpha=(0.5, 3.5), sigma=0.25))
+        ])
+
         seq_to_deterministic = seq.to_deterministic()
         aug_img = seq_to_deterministic.augment_images(image)
         aug_det_mask = seq_to_deterministic.augment_images(det_masks)
@@ -232,9 +230,6 @@ def train_test_split(data_path, notation_type, new_folder = 'cls_and_det',
         verify_img = _drawdots_on_origin_image(mat_list, usage='Classification', notation_type=notation_type, img=img)
         verify_img.save('{}/img{}_verify_cls.bmp'.format(new, order))
 
-    #_reorder_image_files(new_folder_path)
-
-
 
 def _reorder_image_files(datapath, files= ['train', 'test', 'validation']):
     for file in files:
@@ -245,9 +240,6 @@ def _reorder_image_files(datapath, files= ['train', 'test', 'validation']):
             dir = [os.path.join(new_img_folder, img_file) for img_file in os.listdir(new_img_folder)]
             for d in dir:
                 print('this is d: ',d)
-                #pattern = re.split('img[\d]+', )
-                #match = pattern.match(d)
-               # print('match: ', pattern)
                 start = d.find('/img\d_')
                 new_file = os.path.join(img_folder, 'img{}'.format(i + 1), d[start:])
                 os.rename(d, new_file)
@@ -337,13 +329,6 @@ def create_binary_masks(mat):
     mask = Image.new('L', (500, 500), 0)
     ImageDraw.Draw(mask).polygon(polygon, outline=1, fill=1)
     return mask
-    #cv2.imshow('img', np.array(mask))
-    #cv2.waitKey(3000)
-    #cv2.destroyAllWindows()
-    #
-   # mask.save('/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28/cls_and_det/validation/img4/img4_mask.png')
-    #print(mask)
-   # return mask
 
 
 def img_test(i, type):
@@ -466,30 +451,3 @@ def mask_to_corrdinates(mask):
     for i, num in enumerate(a[0]):
         c = (a[1][i], num)
         x.append(c)
-    print(x)
-
-
-
-if __name__ == '__main__':
-    import keras.backend as K
-    import tensorflow as tf
-    print(K.get_session().list_devices())
-'''
-    p = '/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28'
-    from PIL import Image, ImageEnhance
-    load_mask = Image.open('/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28/cls_and_det/train/img1/img1_detection.bmp')
-    contrast = ImageEnhance.Contrast(load_mask)
-    contrast.enhance(200).show(load_mask)
-    maskt = cv2.imread('/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28/cls_and_det/train/img1/img1_detection.bmp', 0)
-    mask_to_corrdinates(maskt)
-    mat = loadmat('/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28/cls_and_det/train/img1/img1_detection.mat')['detection']
-    print(np.sort(mat, axis=-1))
-
-    
-    p = '/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28'
-    print(os.path.abspath('CRCHistoPhenotypes_2016_04_28'))
-    #_reorder_image_files('/home/yichen/Desktop/sfcn-opi-yichen/CRCHistoPhenotypes_2016_04_28/cls_and_det')
-    train_test_split(p, notation_type='point')
-    from PIL import Image, ImageEnhance
-    i = 1
-    #img_test(i, 'test')'''
