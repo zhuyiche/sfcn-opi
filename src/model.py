@@ -3,14 +3,13 @@ import tensorflow as tf
 import keras
 from keras.layers import Input,Conv2D,Add,BatchNormalization,Activation, Lambda, Multiply, Conv2DTranspose, Concatenate
 from keras.models import Model
-from keras.utils import plot_model,np_utils
+from keras.utils import np_utils
 from keras.optimizers import SGD
-from keras.callbacks import EarlyStopping,TensorBoard,ModelCheckpoint,ReduceLROnPlateau, Callback
+from keras.callbacks import EarlyStopping,TensorBoard,ModelCheckpoint, Callback
 from util import load_data
 import os, time
 from image_augmentation import ImageCropping
 from imgaug import augmenters as iaa
-import imgaug as ia
 from loss import detection_loss, classification_loss, joint_loss
 from config import Config
 weight_decay = 0.005
@@ -504,7 +503,7 @@ def det_model_compile(nn, det_loss_weight, softmax_trainable,
     return det_model
 
 
-def cls_model_compile(nn, cls_loss_weight, load_weights, softmax_trainable,
+def cls_model_compile(nn, cls_loss_weight, load_weights,
                       optimizer, summary=False):
     """
 
@@ -514,7 +513,7 @@ def cls_model_compile(nn, cls_loss_weight, load_weights, softmax_trainable,
     :return:
     """
     print('classification model is set')
-    cls_model=nn.classification_branch(trainable=False, softmax_trainable=softmax_trainable)
+    cls_model=nn.classification_branch(trainable=False)
     cls_model.load_weights(load_weights, by_name=True)
     cls_model.compile(optimizer=optimizer,
                       loss=classification_loss(cls_loss_weight),
@@ -525,17 +524,19 @@ def cls_model_compile(nn, cls_loss_weight, load_weights, softmax_trainable,
 
 
 def joint_model_compile(nn, det_loss_weight, cls_loss_in_joint, joint_loss_weight,
-                        load_weights, softmax_trainable,
-                        optimizer, summary=False):
+                        load_weights, optimizer, summary=False):
     """
-
-    :param det_loss_weight:
-    :param kernel_weight:
-    :param summary:
+    :param nn: network
+    :param det_loss_weight: detection weight for joint loss.
+    :param cls_loss_in_joint: cls weight for joint loss.
+    :param joint_loss_weight: regularizer for classification loss part.
+    :param load_weights: load weights for this model.
+    :param optimizer: optimizer for this model.
+    :param summary: if print model summary
     :return:
     """
     print('classification model is set')
-    joint_model=nn.joint_branch(softmax_trainable=softmax_trainable)
+    joint_model=nn.joint_branch()
     joint_model.load_weights(load_weights, by_name=True)
     joint_model.compile(optimizer=optimizer,
                         loss=joint_loss(det_loss_weight, cls_loss_in_joint, joint_loss_weight),
@@ -560,6 +561,11 @@ def tune_loss_weight():
 
 
 def save_model_weights(type, hyper):
+    """
+    Set path to save model for each part of the model.
+    :param type: type of the model, either detection, classification or joint.
+    :param hyper: name with hyper param.
+    """
     model_weights = os.path.join(ROOT_DIR, 'model_weights')
     det_model_weights_saver = os.path.join(model_weights,
                                            str(type) + '_model_weights',
@@ -570,7 +576,6 @@ def save_model_weights(type, hyper):
     joint_model_weights_saver = os.path.join(model_weights,
                                              str(type) + '_model_weights',
                                              hyper + '_' + str(type) + '_joint_train_model.h5')
-
     return [det_model_weights_saver, cls_model_weights_saver, joint_model_weights_saver]
 
 
@@ -580,13 +585,13 @@ if __name__ == '__main__':
     weights = tune_loss_weight()
     CROP_SIZE = 64
     BATCH_SIZE = Config.image_per_gpu * Config.gpu_count
-    EPOCHS = 300
+    EPOCHS = Config.epoch
     TRAIN_STEP_PER_EPOCH = 20
     NUM_TO_CROP, NUM_TO_AUG = 20, 10
 
     data = data_prepare(print_input_shape=True, print_image_shape=True)
     network = SFCNnetwork(l2_regularizer=weights[-1])
-    optimizer = SGD(lr=0.01, momentum=0.9, decay=1e-6, nesterov=True)
+    optimizer = SGD(lr=Config.lr, momentum=0.9, decay=1e-6, nesterov=True)
 
     model_weights_saver = save_model_weights('base', str(EPOCHS))
     # Train Detection Branch
@@ -613,8 +618,7 @@ if __name__ == '__main__':
         print('classification model is training')
         cls_model = cls_model_compile(nn=network, cls_loss_weight=weights[1],
                                       optimizer=optimizer,
-                                      load_weights=model_weights_saver[0],
-                                      softmax_trainable=True)
+                                      load_weights=model_weights_saver[0])
         cls_model.fit_generator(generator_with_aug(data[0], data[1], data[2],
                                                    crop_size=CROP_SIZE,
                                                    batch_size=BATCH_SIZE,
@@ -633,8 +637,7 @@ if __name__ == '__main__':
         print('joint model is training')
         joint_model = joint_model_compile(nn=network, det_loss_weight=weights[0], cls_loss_in_joint=weights[2],
                                           joint_loss_weight=weights[3],  optimizer=optimizer,
-                                          load_weights=model_weights_saver[1],
-                                           softmax_trainable=False)
+                                          load_weights=model_weights_saver[1])
         joint_model.fit_generator(generator_with_aug(data[0], data[1], data[2],
                                                      crop_size=CROP_SIZE,
                                                      batch_size=BATCH_SIZE,
