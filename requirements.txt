@@ -3,7 +3,7 @@ alabaster==0.7.10
 astor==0.6.2
 Babel==2.6.0
 backcall==0.1.0
-bleach==1.5.0
+bleach==3.1.2
 certifi==2018.4.16
 chardet==3.0.4
 cycler==0.10.0
