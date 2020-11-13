@@ -74,7 +74,7 @@ snowballstemmer==1.2.1
 Sphinx==1.7.5
 sphinxcontrib-websupport==1.1.0
 tensorboard==1.8.0
-tensorflow-gpu==1.8.0
+tensorflow-gpu==2.3.1
 termcolor==1.1.0
 terminado==0.8.1
 testpath==0.3.1
