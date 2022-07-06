@@ -16,7 +16,7 @@ entrypoints==0.2.3
 gast==0.2.0
 grpcio==1.11.0
 h5py==2.7.1
-html5lib==0.9999999
+html5lib==0.999999999
 idna==2.6
 imagesize==1.0.0
 imgaug==0.2.5
